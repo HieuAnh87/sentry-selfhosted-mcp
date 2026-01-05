@@ -1,0 +1,10 @@
+node_modules
+build
+*.tgz
+.git
+.gitignore
+.DS_Store
+*.md
+!README.md
+.env
+.env.*

@@ -1,0 +1,27 @@
+{
+  "name": "sentry-selfhosted-mcp",
+  "version": "1.0.0",
+  "description": "Model context protocol server for self hosted sentry instances with debugging tools. ",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "sentry-selfhosted-mcp": "./build/index.js"
+  },
+  "files": [
+    "build"
+  ],
+  "scripts": {
+    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "prepare": "npm run build",
+    "watch": "tsc --watch",
+    "inspector": "npx @modelcontextprotocol/inspector build/index.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "0.6.0",
+    "axios": "^1.8.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "typescript": "^5.3.3"
+  }
+}
