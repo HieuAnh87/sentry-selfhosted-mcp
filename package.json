@@ -19,6 +19,9 @@
     "self-hosted",
     "debugging"
   ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "type": "module",
   "bin": {
     "selfhosted-sentry-mcp": "./build/index.js"

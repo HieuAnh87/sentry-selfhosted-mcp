@@ -3,6 +3,7 @@
 [![npm version](https://badge.fury.io/js/selfhosted-sentry-mcp.svg)](https://www.npmjs.com/package/selfhosted-sentry-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Model Context Protocol](https://img.shields.io/badge/MCP-1.0-blue.svg)](https://modelcontextprotocol.io)
+[![Add to Cursor](https://img.shields.io/badge/Add_to-Cursor-222222?style=for-the-badge&logo=cursor&logoColor=white)](#claude-code--cursor-configuration)
 
 MCP server for self-hosted Sentry instances with debugging-focused tools.
 
@@ -40,20 +41,6 @@ git clone https://github.com/HieuAnh87/sentry-selfhosted-mcp.git
 cd sentry-selfhosted-mcp
 npm install
 npm run build
-```
-
-### Run
-
-**From npm:**
-
-```bash
-selfhosted-sentry-mcp
-```
-
-**From source:**
-
-```bash
-node build/index.js
 ```
 
 ## Tools

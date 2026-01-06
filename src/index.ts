@@ -22,21 +22,7 @@ if (!SENTRY_AUTH_TOKEN) {
   throw new Error('SENTRY_AUTH_TOKEN environment variable is required');
 }
 if (!SENTRY_ORG_SLUG) {
-  // Try to extract from token if not provided, otherwise throw error
-   console.warn('SENTRY_ORG_SLUG environment variable not set. Attempting to infer from token (this might fail).');
-   // Basic extraction attempt - assumes standard token format
-   try {
-       const tokenPayload = JSON.parse(Buffer.from(SENTRY_AUTH_TOKEN.split('_')[1], 'base64').toString());
-       if (tokenPayload.org) {
-           process.env.SENTRY_ORG_SLUG = tokenPayload.org; // Set it for later use
-           console.warn(`Inferred SENTRY_ORG_SLUG as: ${tokenPayload.org}`);
-       } else {
-            throw new Error('SENTRY_ORG_SLUG environment variable is required and could not be inferred from token.');
-       }
-   } catch (e) {
-       throw new Error('SENTRY_ORG_SLUG environment variable is required and could not be inferred from token.');
-   }
-
+  throw new Error('SENTRY_ORG_SLUG environment variable is required');
 }
 
 
@@ -49,7 +35,7 @@ try {
 
 // Ensure URL doesn't end with a slash for consistency
 const SENTRY_BASE_URL = SENTRY_URL.endsWith('/') ? SENTRY_URL.slice(0, -1) : SENTRY_URL;
-const ORG_SLUG = process.env.SENTRY_ORG_SLUG; // Use the potentially inferred value
+const ORG_SLUG = SENTRY_ORG_SLUG;
 
 // --- Argument Type Guards ---
 const isValidGetIssueArgs = (args: any): args is {
