@@ -1,5 +1,5 @@
 {
-  "name": "sentry-selfhosted-mcp",
+  "name": "selfhosted-sentry-mcp",
   "version": "1.0.0",
   "description": "Model context protocol server for self-hosted Sentry instances with debugging tools.",
   "license": "MIT",
@@ -21,7 +21,7 @@
   ],
   "type": "module",
   "bin": {
-    "sentry-selfhosted-mcp": "./build/index.js"
+    "selfhosted-sentry-mcp": "./build/index.js"
   },
   "files": [
     "build"
@@ -30,7 +30,9 @@
     "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
     "prepare": "npm run build",
     "watch": "tsc --watch",
-    "inspector": "npx @modelcontextprotocol/inspector build/index.js"
+    "inspector": "npx @modelcontextprotocol/inspector build/index.js",
+    "test": "node --test test/**/*.test.js",
+    "test:smoke": "node test/smoke.test.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "0.6.0",
