@@ -24,7 +24,28 @@ Key capabilities:
 ### Prerequisites
 
 - Node.js 20+
-- Sentry API token and org slug
+- Self-hosted Sentry instance
+
+### Getting Sentry Credentials
+
+You need 3 environment variables from your Sentry instance:
+
+**1. SENTRY_URL**
+```
+https://your-sentry-instance.com
+```
+The base URL of your self-hosted Sentry.
+
+**2. SENTRY_AUTH_TOKEN**
+1. Go to **Settings > Auth Tokens**
+2. Click **Create New Token**
+3. Select scopes: `issue:read`, `project:read`, `event:read`, `issue:write`, `comment:write`
+4. Copy the token
+
+**3. SENTRY_ORG_SLUG**
+1. Go to **Settings > General** in your organization
+2. Find **Organization Slug** (e.g., `my-org`)
+3. Or check the URL: `https://your-sentry.com/organizations/[slug]/`
 
 ### Install
 
