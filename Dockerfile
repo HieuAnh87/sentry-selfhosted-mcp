@@ -10,16 +10,18 @@ COPY package*.json tsconfig.json ./
 COPY src ./src
 
 # Install all dependencies and build (prepare script runs automatically)
-RUN npm ci --no-audit --no-fund && \
-    npm cache clean --force
+RUN --mount=type=cache,target=/root/.npm,id=npm-cache npm ci --no-audit --no-fund
 
 # Production stage - minimal runtime
 FROM node:20-alpine AS production
 
-# Add labels for better container management
-LABEL maintainer="sentry-selfhosted-mcp"
-LABEL version="1.0.0"
-LABEL description="MCP server for self-hosted Sentry instances"
+# OCI labels for better container management
+LABEL org.opencontainers.image.title="sentry-selfhosted-mcp"
+LABEL org.opencontainers.image.description="MCP server for self-hosted Sentry instances"
+LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.source="https://github.com/HieuAnh87/sentry-selfhosted-mcp"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.vendor="hieuda"
 
 WORKDIR /app
 
@@ -33,9 +35,8 @@ COPY package*.json ./
 # Install only production dependencies
 # --ignore-scripts: skip prepare (build already done)
 # --no-audit --no-fund: faster install, less noise
-RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund && \
-    npm cache clean --force && \
-    rm -rf /tmp/* /root/.npm
+RUN --mount=type=cache,target=/root/.npm,id=npm-cache npm ci --omit=dev --ignore-scripts --no-audit --no-fund && \
+    rm -rf /tmp/*
 
 # Copy built files from builder stage
 COPY --from=builder --chown=mcpuser:mcpuser /app/build ./build

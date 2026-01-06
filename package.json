@@ -1,8 +1,24 @@
 {
   "name": "sentry-selfhosted-mcp",
   "version": "1.0.0",
-  "description": "Model context protocol server for self hosted sentry instances with debugging tools. ",
-  "private": true,
+  "description": "Model context protocol server for self-hosted Sentry instances with debugging tools.",
+  "license": "MIT",
+  "author": "hieuda",
+  "homepage": "https://github.com/HieuAnh87/sentry-selfhosted-mcp",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HieuAnh87/sentry-selfhosted-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/HieuAnh87/sentry-selfhosted-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "modelcontextprotocol",
+    "sentry",
+    "self-hosted",
+    "debugging"
+  ],
   "type": "module",
   "bin": {
     "sentry-selfhosted-mcp": "./build/index.js"
