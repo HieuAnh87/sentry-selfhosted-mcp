@@ -31,5 +31,6 @@ asterisk-config.json
 # Serena MCP
 .serena/
 
-# Test coverage
+# Test files
+test/
 coverage/
