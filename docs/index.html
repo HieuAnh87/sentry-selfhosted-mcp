@@ -417,10 +417,29 @@
       cursor: pointer;
       border-bottom: 2px solid transparent;
       font-weight: 500;
+      background: none;
+      border-top: none;
+      border-left: none;
+      border-right: none;
+      font-family: inherit;
     }
+    .code-tab:hover { color: var(--dark-text); }
     .code-tab.active {
       color: var(--dark-text);
       border-bottom-color: var(--accent);
+    }
+    .code-panels { position: relative; }
+    .code-panel { display: none; }
+    .code-panel.active { display: block; }
+    .code-content {
+      padding: 16px;
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--dark-text);
+      overflow-x: auto;
+      margin: 0;
+      white-space: pre;
     }
     .code-header {
       display: flex;
@@ -445,14 +464,6 @@
       font-family: inherit;
     }
     .copy-btn:hover { color: var(--dark-text); }
-    .code-content {
-      padding: 16px;
-      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
-      font-size: 13px;
-      line-height: 1.7;
-      color: var(--dark-text);
-      overflow-x: auto;
-    }
     .code-content .key { color: #7dd3fc; }
     .code-content .string { color: #86efac; }
     .code-content .comment { color: var(--dark-text-secondary); }
@@ -862,18 +873,20 @@
       </div>
       <div class="code-block">
         <div class="code-tabs">
-          <div class="code-tab active">Claude Desktop</div>
-          <div class="code-tab">Cursor</div>
-          <div class="code-tab">Cline</div>
-          <div class="code-tab">Windsurf</div>
+          <button class="code-tab active" data-tab="claude">Claude Desktop</button>
+          <button class="code-tab" data-tab="cursor">Cursor</button>
+          <button class="code-tab" data-tab="cline">Cline</button>
+          <button class="code-tab" data-tab="windsurf">Windsurf</button>
         </div>
         <div class="code-header">
           <a class="docs-link" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp" target="_blank">See full docs on GitHub →</a>
-          <button class="copy-btn" onclick="navigator.clipboard.writeText(this.closest('.code-block').querySelector('.code-content').textContent)">Copy</button>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
         </div>
-        <div class="code-content">{
+        <div class="code-panels">
+          <div class="code-panel active" data-panel="claude">
+            <pre class="code-content">{
   <span class="key">"mcpServers"</span>: {
-    <span class="key">"sentry-selfhosted"</span>: {
+    <span class="key">"sentry"</span>: {
       <span class="key">"command"</span>: <span class="string">"npx"</span>,
       <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"sentry-selfhosted-mcp"</span>],
       <span class="key">"env"</span>: {
@@ -883,7 +896,54 @@
       }
     }
   }
-}</div>
+}</pre>
+          </div>
+          <div class="code-panel" data-panel="cursor">
+            <pre class="code-content">{
+  <span class="key">"mcpServers"</span>: {
+    <span class="key">"sentry"</span>: {
+      <span class="key">"command"</span>: <span class="string">"npx"</span>,
+      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"sentry-selfhosted-mcp"</span>],
+      <span class="key">"env"</span>: {
+        <span class="key">"SENTRY_URL"</span>: <span class="string">"https://sentry.yourcompany.com"</span>,
+        <span class="key">"SENTRY_AUTH_TOKEN"</span>: <span class="string">"sntrys_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"</span>,
+        <span class="key">"SENTRY_ORG_SLUG"</span>: <span class="string">"your-org"</span>
+      }
+    }
+  }
+}</pre>
+          </div>
+          <div class="code-panel" data-panel="cline">
+            <pre class="code-content">{
+  <span class="key">"mcpServers"</span>: {
+    <span class="key">"sentry"</span>: {
+      <span class="key">"command"</span>: <span class="string">"npx"</span>,
+      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"sentry-selfhosted-mcp"</span>],
+      <span class="key">"env"</span>: {
+        <span class="key">"SENTRY_URL"</span>: <span class="string">"https://sentry.yourcompany.com"</span>,
+        <span class="key">"SENTRY_AUTH_TOKEN"</span>: <span class="string">"sntrys_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"</span>,
+        <span class="key">"SENTRY_ORG_SLUG"</span>: <span class="string">"your-org"</span>
+      }
+    }
+  }
+}</pre>
+          </div>
+          <div class="code-panel" data-panel="windsurf">
+            <pre class="code-content">{
+  <span class="key">"mcpServers"</span>: {
+    <span class="key">"sentry"</span>: {
+      <span class="key">"command"</span>: <span class="string">"npx"</span>,
+      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"sentry-selfhosted-mcp"</span>],
+      <span class="key">"env"</span>: {
+        <span class="key">"SENTRY_URL"</span>: <span class="string">"https://sentry.yourcompany.com"</span>,
+        <span class="key">"SENTRY_AUTH_TOKEN"</span>: <span class="string">"sntrys_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"</span>,
+        <span class="key">"SENTRY_ORG_SLUG"</span>: <span class="string">"your-org"</span>
+      }
+    }
+  }
+}</pre>
+          </div>
+        </div>
         <div class="code-footer">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
           Keep your token safe. Read-only access recommended.
@@ -1056,6 +1116,32 @@
       </div>
     </div>
   </footer>
+
+  <script>
+    // Tab switching
+    document.querySelectorAll('.code-tab').forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        var target = this.getAttribute('data-tab');
+        var block = this.closest('.code-block');
+        block.querySelectorAll('.code-tab').forEach(function(t) { t.classList.remove('active'); });
+        block.querySelectorAll('.code-panel').forEach(function(p) { p.classList.remove('active'); });
+        this.classList.add('active');
+        block.querySelector('.code-panel[data-panel="' + target + '"]').classList.add('active');
+      });
+    });
+
+    // Copy code
+    function copyCode(btn) {
+      var block = btn.closest('.code-block');
+      var activePanel = block.querySelector('.code-panel.active');
+      var text = activePanel.querySelector('.code-content').textContent;
+      navigator.clipboard.writeText(text).then(function() {
+        var original = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(function() { btn.textContent = original; }, 2000);
+      });
+    }
+  </script>
 
 </body>
 </html>
