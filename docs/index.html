@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>sentry-selfhosted-mcp &mdash; MCP Server for Self-Hosted Sentry</title>
+  <meta name="description" content="Give AI assistants safe, structured access to your self-hosted Sentry instance. Issues, events, releases, users, and project diagnostics via Model Context Protocol.">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: oklch(98.5% 0.003 95);
+      --surface: oklch(96% 0.004 95);
+      --border: oklch(90% 0.005 95);
+      --text: oklch(25% 0.01 95);
+      --text-muted: oklch(50% 0.008 95);
+      --accent: oklch(42% 0.12 280);
+      --accent-hover: oklch(35% 0.13 280);
+      --accent-surface: oklch(94% 0.025 280);
+      --code-bg: oklch(22% 0.015 280);
+      --code-text: oklch(88% 0.01 280);
+      --radius: 8px;
+      --max-w: 720px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: var(--accent-hover); text-decoration: underline; }
+
+    .container {
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Nav */
+    nav {
+      padding: 16px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    nav .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    nav .logo {
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+    nav .logo span { color: var(--accent); }
+    nav a.gh-link {
+      font-size: 14px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    nav a.gh-link:hover { color: var(--text); text-decoration: none; }
+
+    /* Hero */
+    .hero {
+      padding: 80px 0 64px;
+    }
+    .hero h1 {
+      font-size: clamp(32px, 5vw, 48px);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.1;
+      margin-bottom: 16px;
+    }
+    .hero p {
+      font-size: 18px;
+      color: var(--text-muted);
+      max-width: 560px;
+      line-height: 1.55;
+      margin-bottom: 32px;
+    }
+    .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.15s ease;
+    }
+    .btn-primary {
+      background: var(--accent);
+      color: oklch(98% 0.003 280);
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      text-decoration: none;
+      color: oklch(98% 0.003 280);
+    }
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover {
+      background: var(--border);
+      text-decoration: none;
+    }
+
+    /* Section */
+    section { padding: 48px 0; }
+    section + section { border-top: 1px solid var(--border); }
+
+    h2 {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+    .section-sub {
+      color: var(--text-muted);
+      font-size: 16px;
+      margin-bottom: 32px;
+    }
+
+    /* Pain points */
+    .pain-list { list-style: none; }
+    .pain-list li {
+      padding: 12px 0;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .pain-list li + li { border-top: 1px solid var(--border); }
+    .pain-icon {
+      flex-shrink: 0;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: oklch(92% 0.03 25);
+      color: oklch(45% 0.12 25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+      margin-top: 2px;
+    }
+    .pain-list strong { display: block; margin-bottom: 2px; }
+    .pain-list span { color: var(--text-muted); font-size: 15px; }
+
+    /* Capabilities */
+    .cap-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .cap-item {
+      background: var(--bg);
+      padding: 20px;
+    }
+    .cap-item h3 {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .cap-item p {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    @media (max-width: 540px) {
+      .cap-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Quickstart */
+    .quickstart code {
+      display: block;
+      background: var(--code-bg);
+      color: var(--code-text);
+      padding: 20px;
+      border-radius: var(--radius);
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, monospace;
+      font-size: 14px;
+      line-height: 1.7;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    .quickstart .hint {
+      margin-top: 12px;
+      font-size: 14px;
+      color: var(--text-muted);
+    }
+
+    /* Trust */
+    .trust-items {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .trust-item {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .trust-check {
+      flex-shrink: 0;
+      color: oklch(55% 0.12 145);
+      font-weight: 700;
+      font-size: 16px;
+      margin-top: 1px;
+    }
+    .trust-item strong { display: block; margin-bottom: 2px; }
+    .trust-item span { color: var(--text-muted); font-size: 15px; }
+
+    /* CTA */
+    .cta {
+      text-align: center;
+      padding: 64px 0;
+    }
+    .cta h2 { margin-bottom: 12px; }
+    .cta p {
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      font-size: 16px;
+    }
+    .cta .hero-actions { justify-content: center; }
+
+    /* Footer */
+    footer {
+      padding: 24px 0;
+      border-top: 1px solid var(--border);
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <nav>
+    <div class="container">
+      <div class="logo">sentry<span>-</span>selfhosted<span>-</span>mcp</div>
+      <a class="gh-link" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp" target="_blank" rel="noopener">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </nav>
+
+  <header class="hero">
+    <div class="container">
+      <h1>AI assistants that understand your Sentry</h1>
+      <p>Give Claude, Cursor, and other MCP-compatible tools safe, structured access to your self-hosted Sentry instance. Triage issues, inspect events, and diagnose projects without leaving your editor.</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp">Get started</a>
+        <a class="btn btn-secondary" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp/releases/tag/v1.1.3">View release</a>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <div class="container">
+      <h2>The problem</h2>
+      <p class="section-sub">Self-hosted Sentry holds critical incident data, but AI tools can't reach it safely.</p>
+      <ul class="pain-list">
+        <li>
+          <div class="pain-icon">1</div>
+          <div>
+            <strong>No API bridge for AI assistants</strong>
+            <span>MCP clients have no way to query your self-hosted Sentry without custom integrations.</span>
+          </div>
+        </li>
+        <li>
+          <div class="pain-icon">2</div>
+          <div>
+            <strong>Raw payloads drown context windows</strong>
+            <span>Sentry events are large. Returning full JSON wastes tokens and buries the signal.</span>
+          </div>
+        </li>
+        <li>
+          <div class="pain-icon">3</div>
+          <div>
+            <strong>Manual triage slows incident response</strong>
+            <span>Switching between browser and editor to investigate issues breaks flow and costs time.</span>
+          </div>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <h2>What it does</h2>
+      <p class="section-sub">24 MCP tools across 6 functional areas, all designed for token-efficient AI consumption.</p>
+      <div class="cap-grid">
+        <div class="cap-item">
+          <h3>Issues</h3>
+          <p>List, get, update, bulk-merge, and bulk-unresolve issues with essential field extraction.</p>
+        </div>
+        <div class="cap-item">
+          <h3>Events</h3>
+          <p>Fetch latest events, breadcrumbs, and stack traces with automatic truncation and filtering.</p>
+        </div>
+        <div class="cap-item">
+          <h3>Releases</h3>
+          <p>List releases, get release details, and check health metrics per project.</p>
+        </div>
+        <div class="cap-item">
+          <h3>Users</h3>
+          <p>Query affected users from events with compact field extraction.</p>
+        </div>
+        <div class="cap-item">
+          <h3>Organization</h3>
+          <p>Org stats, team membership, project lists, and tag values for filtering.</p>
+        </div>
+        <div class="cap-item">
+          <h3>Projects</h3>
+          <p>Project details, key transactions, and diagnostic data for targeted investigation.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="quickstart">
+    <div class="container">
+      <h2>Quickstart</h2>
+      <p class="section-sub">Three environment variables, one MCP config entry.</p>
+      <code>{
+  "mcpServers": {
+    "sentry": {
+      "command": "npx",
+      "args": ["-y", "@your-org/sentry-selfhosted-mcp"],
+      "env": {
+        "SENTRY_URL": "https://sentry.yourcompany.com",
+        "SENTRY_AUTH_TOKEN": "sntrys_...",
+        "SENTRY_ORG_SLUG": "your-org"
+      }
+    }
+  }
+}</code>
+      <p class="hint">Requires Node.js 20+. Set <code>SENTRY_URL</code>, <code>SENTRY_AUTH_TOKEN</code>, and <code>SENTRY_ORG_SLUG</code> before starting.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <h2>Built for self-hosted</h2>
+      <p class="section-sub">Security and privacy considerations for production use.</p>
+      <div class="trust-items">
+        <div class="trust-item">
+          <div class="trust-check">&#10003;</div>
+          <div>
+            <strong>No data leaves your instance</strong>
+            <span>All API calls go directly to your self-hosted Sentry. No proxy, no third party.</span>
+          </div>
+        </div>
+        <div class="trust-item">
+          <div class="trust-check">&#10003;</div>
+          <div>
+            <strong>Token-scoped access</strong>
+            <span>Uses Sentry auth tokens with configurable scope. No admin credentials stored.</span>
+          </div>
+        </div>
+        <div class="trust-item">
+          <div class="trust-check">&#10003;</div>
+          <div>
+            <strong>Output filtering by default</strong>
+            <span>Every tool extracts only essential fields. Full payloads available on demand with grep filtering.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <div class="container">
+      <h2>Ready to connect your Sentry</h2>
+      <p>Open-source, MIT licensed. Install in under a minute.</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp">View on GitHub</a>
+        <a class="btn btn-secondary" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp/releases/tag/v1.1.3">Latest release</a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <p>sentry-selfhosted-mcp &middot; MIT License &middot; <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp">GitHub</a></p>
+    </div>
+  </footer>
+
+</body>
+</html>
