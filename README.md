@@ -78,10 +78,7 @@ npm run build
 | `update_sentry_issue_status` | Update issue status | `issue_id`, `status` |
 | `create_sentry_issue_comment` | Add issue comment | `issue_id`, `comment_text` |
 | `get_issue_hashes` | Get fingerprint hashes | `issue_id`, optional `cursor` |
-| `bulk_update_issues` | Bulk resolve/ignore issues | `project_slug` + optional `query`, `status`, `assigned_to` |
-| `get_issue_tags` | List all tags for an issue | `issue_id` |
-| `get_issue_tag_values` | Get tag value distribution | `issue_id`, `tag_key`, optional `limit` |
-| `list_activity` | Issue activity log | `issue_id`, optional `limit`, `cursor` |
+| `bulk_update_issues` | Bulk resolve/ignore issues | `project_slug` + optional `query`, `status`, `assigned_to`, `has_seen` |
 
 ### Event Tools
 | Tool | Purpose | Input |
@@ -96,13 +93,16 @@ npm run build
 ### Release Tools
 | Tool | Purpose | Input |
 | --- | --- | --- |
-| `list_releases` | List releases in org | `query`, `date`, `limit`, `sort` |
+| `list_releases` | List releases in org | `query`, `date`, `limit`, `cursor`, `sort` |
 | `get_release_details` | Release details with health stats | `version`, optional `full` |
 
 ### Organization Tools
 | Tool | Purpose | Input |
 | --- | --- | --- |
 | `list_teams` | List all teams in org | `{}` |
+| `get_issue_tags` | List all tags for an issue | `issue_id` |
+| `get_issue_tag_values` | Get tag value distribution | `issue_id`, `tag_key`, optional `limit` |
+| `list_activity` | Issue activity log | `issue_id`, optional `limit`, `cursor` |
 
 ### Advanced Tools
 | Tool | Purpose | Input |
