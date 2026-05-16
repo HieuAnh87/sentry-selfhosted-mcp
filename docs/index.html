@@ -3,30 +3,39 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>sentry-selfhosted-mcp &mdash; MCP Server for Self-Hosted Sentry</title>
-  <meta name="description" content="Give AI assistants safe, structured access to your self-hosted Sentry instance. Issues, events, releases, users, and project diagnostics via Model Context Protocol.">
+  <title>sentry-selfhosted-mcp — MCP Server for Self-Hosted Sentry</title>
+  <meta name="description" content="Give AI assistants safe, structured access to your self-hosted Sentry instance. 24 tools. Read-only by default.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: oklch(98.5% 0.003 95);
-      --surface: oklch(96% 0.004 95);
-      --border: oklch(90% 0.005 95);
-      --text: oklch(25% 0.01 95);
-      --text-muted: oklch(50% 0.008 95);
-      --accent: oklch(42% 0.12 280);
-      --accent-hover: oklch(35% 0.13 280);
-      --accent-surface: oklch(94% 0.025 280);
-      --code-bg: oklch(22% 0.015 280);
-      --code-text: oklch(88% 0.01 280);
+      --bg: #fafafa;
+      --surface: #ffffff;
+      --border: #e5e7eb;
+      --border-light: #f3f4f6;
+      --text: #111827;
+      --text-secondary: #6b7280;
+      --text-tertiary: #9ca3af;
+      --accent: #4f46e5;
+      --accent-hover: #4338ca;
+      --accent-light: #eef2ff;
+      --dark-bg: #0f172a;
+      --dark-surface: #1e293b;
+      --dark-border: #334155;
+      --dark-text: #f8fafc;
+      --dark-text-secondary: #94a3b8;
       --radius: 8px;
-      --max-w: 720px;
+      --radius-lg: 12px;
+      --max-w: 1120px;
     }
 
     html { scroll-behavior: smooth; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
       line-height: 1.6;
@@ -34,7 +43,7 @@
     }
 
     a { color: var(--accent); text-decoration: none; }
-    a:hover { color: var(--accent-hover); text-decoration: underline; }
+    a:hover { color: var(--accent-hover); }
 
     .container {
       max-width: var(--max-w);
@@ -44,212 +53,617 @@
 
     /* Nav */
     nav {
-      padding: 16px 0;
+      background: var(--surface);
       border-bottom: 1px solid var(--border);
+      padding: 12px 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
     }
     nav .container {
       display: flex;
       justify-content: space-between;
       align-items: center;
     }
-    nav .logo {
+    .nav-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
       font-weight: 700;
       font-size: 15px;
       color: var(--text);
-      letter-spacing: -0.02em;
     }
-    nav .logo span { color: var(--accent); }
-    nav a.gh-link {
-      font-size: 14px;
-      color: var(--text-muted);
+    .nav-logo svg { flex-shrink: 0; }
+    .version-badge {
+      background: var(--border-light);
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
+    .nav-right {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .nav-link {
       display: flex;
       align-items: center;
       gap: 6px;
+      font-size: 14px;
+      color: var(--text-secondary);
+      font-weight: 500;
     }
-    nav a.gh-link:hover { color: var(--text); text-decoration: none; }
+    .nav-link:hover { color: var(--text); text-decoration: none; }
+    .star-badge {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      background: var(--border-light);
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 500;
+    }
+    .release-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+    .release-badge .pill {
+      background: var(--accent);
+      color: white;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+    }
 
     /* Hero */
     .hero {
-      padding: 80px 0 64px;
+      padding: 64px 0 48px;
+    }
+    .hero .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 48px;
+      align-items: center;
+    }
+    .hero-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      margin-bottom: 12px;
     }
     .hero h1 {
-      font-size: clamp(32px, 5vw, 48px);
+      font-size: clamp(32px, 4vw, 44px);
       font-weight: 800;
       letter-spacing: -0.03em;
       line-height: 1.1;
       margin-bottom: 16px;
+      color: var(--text);
     }
-    .hero p {
-      font-size: 18px;
-      color: var(--text-muted);
-      max-width: 560px;
-      line-height: 1.55;
-      margin-bottom: 32px;
+    .hero-desc {
+      font-size: 16px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 24px;
+      max-width: 480px;
     }
-    .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+    .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
 
     .btn {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 12px 24px;
+      padding: 10px 20px;
       border-radius: var(--radius);
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 600;
       border: none;
       cursor: pointer;
       text-decoration: none;
-      transition: background 0.15s ease;
+      transition: all 0.15s ease;
+      font-family: inherit;
     }
-    .btn-primary {
-      background: var(--accent);
-      color: oklch(98% 0.003 280);
+    .btn-dark {
+      background: var(--dark-bg);
+      color: white;
     }
-    .btn-primary:hover {
-      background: var(--accent-hover);
-      text-decoration: none;
-      color: oklch(98% 0.003 280);
-    }
-    .btn-secondary {
-      background: var(--surface);
+    .btn-dark:hover { background: #1e293b; color: white; text-decoration: none; }
+    .btn-outline {
+      background: transparent;
       color: var(--text);
       border: 1px solid var(--border);
     }
-    .btn-secondary:hover {
-      background: var(--border);
-      text-decoration: none;
+    .btn-outline:hover { background: var(--border-light); text-decoration: none; }
+
+    .hero-badges {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .hero-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+    .hero-badge svg { flex-shrink: 0; color: var(--text-tertiary); }
+
+    /* Terminal mockup */
+    .terminal {
+      background: var(--dark-bg);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    .terminal-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      background: var(--dark-surface);
+      border-bottom: 1px solid var(--dark-border);
+    }
+    .terminal-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    .terminal-dot.red { background: #ef4444; }
+    .terminal-dot.yellow { background: #f59e0b; }
+    .terminal-dot.green { background: #22c55e; }
+    .terminal-title {
+      flex: 1;
+      text-align: center;
+      font-size: 13px;
+      color: var(--dark-text-secondary);
+      font-weight: 500;
+    }
+    .terminal-body { padding: 20px; }
+    .terminal-input {
+      background: var(--dark-surface);
+      border: 1px solid var(--dark-border);
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 16px;
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 13px;
+      color: var(--dark-text);
+    }
+    .terminal-input span { color: #22c55e; }
+    .terminal-table-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--dark-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+    .terminal-table {
+      width: 100%;
+      font-size: 12px;
+      font-family: "SF Mono", "Fira Code", monospace;
+    }
+    .terminal-table th {
+      text-align: left;
+      color: var(--dark-text-secondary);
+      font-weight: 500;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--dark-border);
+    }
+    .terminal-table td {
+      padding: 8px 0;
+      color: var(--dark-text);
+      border-bottom: 1px solid var(--dark-border);
+    }
+    .terminal-table tr:last-child td { border-bottom: none; }
+    .terminal-table .error { color: #f87171; }
+    .terminal-table .num { color: var(--dark-text-secondary); text-align: right; }
+    .terminal-source {
+      margin-top: 12px;
+      font-size: 11px;
+      color: var(--dark-text-secondary);
     }
 
-    /* Section */
-    section { padding: 48px 0; }
+    /* Sections */
+    section { padding: 64px 0; }
     section + section { border-top: 1px solid var(--border); }
 
-    h2 {
+    .section-header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .section-header h2 {
       font-size: 24px;
       font-weight: 700;
       letter-spacing: -0.02em;
       margin-bottom: 8px;
     }
-    .section-sub {
-      color: var(--text-muted);
-      font-size: 16px;
-      margin-bottom: 32px;
+    .section-header p {
+      color: var(--text-secondary);
+      font-size: 15px;
     }
 
-    /* Pain points */
-    .pain-list { list-style: none; }
-    .pain-list li {
-      padding: 12px 0;
+    /* Problem grid */
+    .problem-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+    }
+    .problem-item {
+      text-align: center;
+      padding: 24px 16px;
+    }
+    .problem-icon {
+      width: 48px;
+      height: 48px;
+      margin: 0 auto 16px;
       display: flex;
-      gap: 12px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: var(--border-light);
+      color: var(--text-secondary);
+    }
+    .problem-item h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .problem-item p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* Capabilities grid */
+    .cap-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 24px;
+    }
+    .cap-item {
+      text-align: center;
+      padding: 16px 8px;
+    }
+    .cap-icon {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
+    }
+    .cap-item h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .cap-item p {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* Quickstart */
+    .quickstart .container {
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 48px;
+      align-items: start;
+    }
+    .quickstart h2 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .quickstart .subtitle {
+      color: var(--text-secondary);
+      font-size: 14px;
+      margin-bottom: 24px;
+    }
+    .steps { display: flex; flex-direction: column; gap: 20px; }
+    .step {
+      display: flex;
+      gap: 16px;
       align-items: flex-start;
     }
-    .pain-list li + li { border-top: 1px solid var(--border); }
-    .pain-icon {
-      flex-shrink: 0;
-      width: 24px;
-      height: 24px;
+    .step-num {
+      width: 28px;
+      height: 28px;
       border-radius: 50%;
-      background: oklch(92% 0.03 25);
-      color: oklch(45% 0.12 25);
+      background: var(--accent);
+      color: white;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 13px;
       font-weight: 700;
-      margin-top: 2px;
+      flex-shrink: 0;
     }
-    .pain-list strong { display: block; margin-bottom: 2px; }
-    .pain-list span { color: var(--text-muted); font-size: 15px; }
+    .step h4 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 2px;
+    }
+    .step p {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
 
-    /* Capabilities */
-    .cap-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 1px;
-      background: var(--border);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
+    .code-block {
+      background: var(--dark-bg);
+      border-radius: var(--radius-lg);
       overflow: hidden;
     }
-    .cap-item {
-      background: var(--bg);
-      padding: 20px;
+    .code-tabs {
+      display: flex;
+      gap: 0;
+      background: var(--dark-surface);
+      border-bottom: 1px solid var(--dark-border);
+      padding: 0 16px;
     }
-    .cap-item h3 {
-      font-size: 15px;
+    .code-tab {
+      padding: 10px 16px;
+      font-size: 13px;
+      color: var(--dark-text-secondary);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      font-weight: 500;
+    }
+    .code-tab.active {
+      color: var(--dark-text);
+      border-bottom-color: var(--accent);
+    }
+    .code-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--dark-border);
+    }
+    .code-header .docs-link {
+      font-size: 12px;
+      color: var(--accent);
+      font-weight: 500;
+    }
+    .copy-btn {
+      background: var(--dark-surface);
+      border: 1px solid var(--dark-border);
+      color: var(--dark-text-secondary);
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .copy-btn:hover { color: var(--dark-text); }
+    .code-content {
+      padding: 16px;
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--dark-text);
+      overflow-x: auto;
+    }
+    .code-content .key { color: #7dd3fc; }
+    .code-content .string { color: #86efac; }
+    .code-content .comment { color: var(--dark-text-secondary); }
+    .code-footer {
+      padding: 12px 16px;
+      border-top: 1px solid var(--dark-border);
+      font-size: 12px;
+      color: var(--dark-text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Tools section */
+    .tools-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 24px;
+    }
+    .tools-col h3 {
+      font-size: 14px;
       font-weight: 600;
       margin-bottom: 4px;
-    }
-    .cap-item p {
-      font-size: 14px;
-      color: var(--text-muted);
-      line-height: 1.5;
-    }
-    @media (max-width: 540px) {
-      .cap-grid { grid-template-columns: 1fr; }
-    }
-
-    /* Quickstart */
-    .quickstart code {
-      display: block;
-      background: var(--code-bg);
-      color: var(--code-text);
-      padding: 20px;
-      border-radius: var(--radius);
-      font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, monospace;
-      font-size: 14px;
-      line-height: 1.7;
-      overflow-x: auto;
-      white-space: pre;
-    }
-    .quickstart .hint {
-      margin-top: 12px;
-      font-size: 14px;
-      color: var(--text-muted);
-    }
-
-    /* Trust */
-    .trust-items {
       display: flex;
-      flex-direction: column;
-      gap: 12px;
+      align-items: center;
+      gap: 6px;
+    }
+    .tools-col h3 .count {
+      font-size: 12px;
+      color: var(--text-tertiary);
+      font-weight: 400;
+    }
+    .tools-col ul {
+      list-style: none;
+      font-size: 13px;
+      color: var(--text-secondary);
+      font-family: "SF Mono", "Fira Code", monospace;
+    }
+    .tools-col li { padding: 3px 0; }
+
+    .tools-link {
+      text-align: center;
+      margin-top: 24px;
+    }
+    .tools-link a {
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    /* Trust section */
+    .trust-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
     }
     .trust-item {
+      text-align: center;
+      padding: 24px 16px;
+    }
+    .trust-icon {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 12px;
       display: flex;
-      gap: 12px;
-      align-items: flex-start;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent);
     }
-    .trust-check {
-      flex-shrink: 0;
-      color: oklch(55% 0.12 145);
-      font-weight: 700;
-      font-size: 16px;
-      margin-top: 1px;
+    .trust-item h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 6px;
     }
-    .trust-item strong { display: block; margin-bottom: 2px; }
-    .trust-item span { color: var(--text-muted); font-size: 15px; }
+    .trust-item p {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
 
     /* CTA */
-    .cta {
+    .cta-section {
+      background: var(--dark-bg);
+      border-radius: var(--radius-lg);
+      padding: 40px 48px;
+      margin: 0 24px 64px;
+      max-width: calc(var(--max-w) - 48px);
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .cta-section .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 32px;
+    }
+    .cta-left h2 {
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--dark-text);
+      margin-bottom: 8px;
+    }
+    .cta-left p {
+      color: var(--dark-text-secondary);
+      font-size: 15px;
+    }
+    .cta-right {
+      display: flex;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    .cta-card {
+      background: var(--dark-surface);
+      border: 1px solid var(--dark-border);
+      border-radius: var(--radius);
+      padding: 16px 24px;
       text-align: center;
-      padding: 64px 0;
     }
-    .cta h2 { margin-bottom: 12px; }
-    .cta p {
-      color: var(--text-muted);
-      margin-bottom: 24px;
-      font-size: 16px;
+    .cta-card .btn { margin-bottom: 8px; }
+    .cta-card .btn-dark {
+      background: white;
+      color: var(--dark-bg);
     }
-    .cta .hero-actions { justify-content: center; }
+    .cta-card .btn-dark:hover { background: #e5e7eb; }
+    .cta-card .repo-name {
+      font-size: 12px;
+      color: var(--dark-text-secondary);
+    }
+    .cta-card-light {
+      background: var(--surface);
+      border: 1px solid var(--border);
+    }
+    .cta-card-light .release-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .cta-card-light .release-label .pill {
+      background: var(--accent);
+      color: white;
+      font-size: 12px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      margin-left: 8px;
+    }
+    .cta-card-light .all-releases {
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
 
     /* Footer */
     footer {
-      padding: 24px 0;
       border-top: 1px solid var(--border);
-      text-align: center;
+      padding: 24px 0;
+    }
+    footer .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .footer-links {
+      display: flex;
+      gap: 24px;
+    }
+    .footer-links a {
       font-size: 13px;
-      color: var(--text-muted);
+      color: var(--text-secondary);
+    }
+    .footer-links a:hover { color: var(--text); }
+    .footer-right {
+      color: var(--text-tertiary);
+    }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .hero .container { grid-template-columns: 1fr; }
+      .terminal { display: none; }
+      .problem-grid { grid-template-columns: repeat(2, 1fr); }
+      .cap-grid { grid-template-columns: repeat(3, 1fr); }
+      .quickstart .container { grid-template-columns: 1fr; }
+      .tools-grid { grid-template-columns: repeat(3, 1fr); }
+      .trust-grid { grid-template-columns: repeat(2, 1fr); }
+      .cta-section .container { flex-direction: column; text-align: center; }
+      .cta-right { flex-direction: column; width: 100%; }
+      .cta-card { width: 100%; }
+    }
+    @media (max-width: 600px) {
+      .problem-grid { grid-template-columns: 1fr; }
+      .cap-grid { grid-template-columns: repeat(2, 1fr); }
+      .tools-grid { grid-template-columns: repeat(2, 1fr); }
+      .trust-grid { grid-template-columns: 1fr; }
+      .nav-right { display: none; }
+      .hero-badges { flex-direction: column; gap: 8px; }
+      footer .container { flex-direction: column; gap: 16px; text-align: center; }
+      .footer-links { flex-wrap: wrap; justify-content: center; }
     }
   </style>
 </head>
@@ -257,153 +671,397 @@
 
   <nav>
     <div class="container">
-      <div class="logo">sentry<span>-</span>selfhosted<span>-</span>mcp</div>
-      <a class="gh-link" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp" target="_blank" rel="noopener">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
-        GitHub
-      </a>
+      <div class="nav-left">
+        <div class="nav-logo">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          sentry-selfhosted-mcp
+        </div>
+        <span class="version-badge">v1.1.3</span>
+      </div>
+      <div class="nav-right">
+        <a class="nav-link" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+          GitHub
+        </a>
+        <span class="star-badge">★ 1.2k</span>
+        <span class="release-badge">Latest release <span class="pill">v1.1.3</span></span>
+      </div>
     </div>
   </nav>
 
   <header class="hero">
     <div class="container">
-      <h1>AI assistants that understand your Sentry</h1>
-      <p>Give Claude, Cursor, and other MCP-compatible tools safe, structured access to your self-hosted Sentry instance. Triage issues, inspect events, and diagnose projects without leaving your editor.</p>
-      <div class="hero-actions">
-        <a class="btn btn-primary" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp">Get started</a>
-        <a class="btn btn-secondary" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp/releases/tag/v1.1.3">View release</a>
+      <div class="hero-content">
+        <div class="hero-label">MCP Server for Self-Hosted Sentry</div>
+        <h1>Bring your Sentry data to AI assistants.</h1>
+        <p class="hero-desc">Query issues, events, releases, users, org stats, and project diagnostics from your self-hosted Sentry—securely. 24 tools. Read-only by default. Built for AI workflows.</p>
+        <div class="hero-actions">
+          <a class="btn btn-dark" href="#quickstart">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            Get Started in 1 Minute
+          </a>
+          <a class="btn btn-outline" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp" target="_blank" rel="noopener">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+            View on GitHub
+          </a>
+        </div>
+        <div class="hero-badges">
+          <span class="hero-badge">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Self-hosted
+          </span>
+          <span class="hero-badge">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            Read-only by default
+          </span>
+          <span class="hero-badge">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+            24 tools
+          </span>
+        </div>
       </div>
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="terminal-dot red"></div>
+          <div class="terminal-dot yellow"></div>
+          <div class="terminal-dot green"></div>
+          <div class="terminal-title">Ask your AI assistant anything about your Sentry</div>
+        </div>
+        <div class="terminal-body">
+          <div class="terminal-input"><span>&gt;</span> Show me top issues in production this week</div>
+          <div class="terminal-table-title">Top Issues (This Week)</div>
+          <table class="terminal-table">
+            <thead>
+              <tr><th>Issue</th><th style="text-align:right">Events</th><th style="text-align:right">Users</th><th>First Seen</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="error">TypeError: Cannot read property 'x'</td><td class="num">3,432</td><td class="num">122</td><td>2d ago</td></tr>
+              <tr><td class="error">DBConnectionError: timeout</td><td class="num">1,987</td><td class="num">98</td><td>3d ago</td></tr>
+              <tr><td class="error">ChunkLoadError: Loading chunk 23 failed</td><td class="num">1,102</td><td class="num">76</td><td>5d ago</td></tr>
+            </tbody>
+          </table>
+          <div class="terminal-source">Source: sentry-selfhosted-mcp</div>
+        </div>
+      </div>
+    </div>
     </div>
   </header>
 
   <section>
     <div class="container">
-      <h2>The problem</h2>
-      <p class="section-sub">Self-hosted Sentry holds critical incident data, but AI tools can't reach it safely.</p>
-      <ul class="pain-list">
-        <li>
-          <div class="pain-icon">1</div>
-          <div>
-            <strong>No API bridge for AI assistants</strong>
-            <span>MCP clients have no way to query your self-hosted Sentry without custom integrations.</span>
+      <div class="section-header">
+        <h2>The problem</h2>
+        <p>Sentry is powerful, but hard to access programmatically in AI workflows.</p>
+      </div>
+      <div class="problem-grid">
+        <div class="problem-item">
+          <div class="problem-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
           </div>
-        </li>
-        <li>
-          <div class="pain-icon">2</div>
-          <div>
-            <strong>Raw payloads drown context windows</strong>
-            <span>Sentry events are large. Returning full JSON wastes tokens and buries the signal.</span>
+          <h3>No native AI integration</h3>
+          <p>Sentry UI is not designed for AI assistants or automation.</p>
+        </div>
+        <div class="problem-item">
+          <div class="problem-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
           </div>
-        </li>
-        <li>
-          <div class="pain-icon">3</div>
-          <div>
-            <strong>Manual triage slows incident response</strong>
-            <span>Switching between browser and editor to investigate issues breaks flow and costs time.</span>
+          <h3>Manual &amp; time-consuming</h3>
+          <p>Copy-paste, clicking around, exporting data—slow and error-prone.</p>
+        </div>
+        <div class="problem-item">
+          <div class="problem-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           </div>
-        </li>
-      </ul>
-    </div>
-  </section>
-
-  <section>
-    <div class="container">
-      <h2>What it does</h2>
-      <p class="section-sub">24 MCP tools across 6 functional areas, all designed for token-efficient AI consumption.</p>
-      <div class="cap-grid">
-        <div class="cap-item">
-          <h3>Issues</h3>
-          <p>List, get, update, bulk-merge, and bulk-unresolve issues with essential field extraction.</p>
+          <h3>Security concerns</h3>
+          <p>Sending data to third-party services is risky.</p>
         </div>
-        <div class="cap-item">
-          <h3>Events</h3>
-          <p>Fetch latest events, breadcrumbs, and stack traces with automatic truncation and filtering.</p>
-        </div>
-        <div class="cap-item">
-          <h3>Releases</h3>
-          <p>List releases, get release details, and check health metrics per project.</p>
-        </div>
-        <div class="cap-item">
-          <h3>Users</h3>
-          <p>Query affected users from events with compact field extraction.</p>
-        </div>
-        <div class="cap-item">
-          <h3>Organization</h3>
-          <p>Org stats, team membership, project lists, and tag values for filtering.</p>
-        </div>
-        <div class="cap-item">
-          <h3>Projects</h3>
-          <p>Project details, key transactions, and diagnostic data for targeted investigation.</p>
+        <div class="problem-item">
+          <div class="problem-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          </div>
+          <h3>Limited context</h3>
+          <p>AI lacks real-time context from issues, releases, users, and system health.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="quickstart">
+  <section>
     <div class="container">
-      <h2>Quickstart</h2>
-      <p class="section-sub">Three environment variables, one MCP config entry.</p>
-      <code>{
-  "mcpServers": {
-    "sentry": {
-      "command": "npx",
-      "args": ["-y", "@your-org/sentry-selfhosted-mcp"],
-      "env": {
-        "SENTRY_URL": "https://sentry.yourcompany.com",
-        "SENTRY_AUTH_TOKEN": "sntrys_...",
-        "SENTRY_ORG_SLUG": "your-org"
+      <div class="section-header">
+        <h2>What it does</h2>
+        <p>A secure MCP server that exposes your Sentry data to AI assistants.</p>
+      </div>
+      <div class="cap-grid">
+        <div class="cap-item">
+          <div class="cap-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <h3>Issues &amp; Events</h3>
+          <p>Search, filter, and inspect issues and events.</p>
+        </div>
+        <div class="cap-item">
+          <div class="cap-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          </div>
+          <h3>Releases</h3>
+          <p>List, inspect, and compare releases.</p>
+        </div>
+        <div class="cap-item">
+          <div class="cap-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          </div>
+          <h3>Users</h3>
+          <p>Lookup users and activity insights.</p>
+        </div>
+        <div class="cap-item">
+          <div class="cap-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          </div>
+          <h3>Organizations</h3>
+          <p>Org stats and usage overview.</p>
+        </div>
+        <div class="cap-item">
+          <div class="cap-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </div>
+          <h3>Diagnostics</h3>
+          <p>Project health and system diagnostics.</p>
+        </div>
+        <div class="cap-item">
+          <div class="cap-icon">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1010 10H12V2z"/><path d="M20.66 8A10 10 0 0014 2.05V8h6.66z"/></svg>
+          </div>
+          <h3>AI-Ready</h3>
+          <p>Structured, concise, and context-rich responses.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="quickstart" id="quickstart">
+    <div class="container">
+      <div class="quickstart-left">
+        <h2>Quickstart (1 minute)</h2>
+        <p class="subtitle">Configure your AI client to use the MCP server.</p>
+        <div class="steps">
+          <div class="step">
+            <div class="step-num">1</div>
+            <div>
+              <h4>Get an Auth Token in Sentry</h4>
+              <p>Create a token with read access.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">2</div>
+            <div>
+              <h4>Add to your MCP client config</h4>
+              <p>Use the command below.</p>
+            </div>
+          </div>
+          <div class="step">
+            <div class="step-num">3</div>
+            <div>
+              <h4>Start querying</h4>
+              <p>Ask questions about your Sentry data.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="code-block">
+        <div class="code-tabs">
+          <div class="code-tab active">Claude Desktop</div>
+          <div class="code-tab">Cursor</div>
+          <div class="code-tab">Cline</div>
+          <div class="code-tab">Windsurf</div>
+        </div>
+        <div class="code-header">
+          <a class="docs-link" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp" target="_blank">See full docs on GitHub →</a>
+          <button class="copy-btn" onclick="navigator.clipboard.writeText(this.closest('.code-block').querySelector('.code-content').textContent)">Copy</button>
+        </div>
+        <div class="code-content">{
+  <span class="key">"mcpServers"</span>: {
+    <span class="key">"sentry-selfhosted"</span>: {
+      <span class="key">"command"</span>: <span class="string">"npx"</span>,
+      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"sentry-selfhosted-mcp"</span>],
+      <span class="key">"env"</span>: {
+        <span class="key">"SENTRY_URL"</span>: <span class="string">"https://sentry.yourcompany.com"</span>,
+        <span class="key">"SENTRY_AUTH_TOKEN"</span>: <span class="string">"sntrys_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"</span>,
+        <span class="key">"SENTRY_ORG_SLUG"</span>: <span class="string">"your-org"</span>
       }
     }
   }
-}</code>
-      <p class="hint">Requires Node.js 20+. Set <code>SENTRY_URL</code>, <code>SENTRY_AUTH_TOKEN</code>, and <code>SENTRY_ORG_SLUG</code> before starting.</p>
+}</div>
+        <div class="code-footer">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+          Keep your token safe. Read-only access recommended.
+        </div>
+      </div>
     </div>
   </section>
 
   <section>
     <div class="container">
-      <h2>Built for self-hosted</h2>
-      <p class="section-sub">Security and privacy considerations for production use.</p>
-      <div class="trust-items">
+      <div class="section-header">
+        <h2>24 tools. Organized for productivity.</h2>
+      </div>
+      <div class="tools-grid">
+        <div class="tools-col">
+          <h3>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Issues <span class="count">(7)</span>
+          </h3>
+          <ul>
+            <li>search_issues</li>
+            <li>get_issue</li>
+            <li>get_issue_events</li>
+            <li>get_issue_tags</li>
+            <li>get_top_issues</li>
+            <li>get_issue_users</li>
+            <li>get_issue_trends</li>
+          </ul>
+        </div>
+        <div class="tools-col">
+          <h3>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            Events <span class="count">(6)</span>
+          </h3>
+          <ul>
+            <li>search_events</li>
+            <li>get_event</li>
+            <li>get_event_contexts</li>
+            <li>get_event_tags</li>
+            <li>get_top_events</li>
+            <li>get_event_trends</li>
+          </ul>
+        </div>
+        <div class="tools-col">
+          <h3>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+            Releases <span class="count">(4)</span>
+          </h3>
+          <ul>
+            <li>list_releases</li>
+            <li>get_release</li>
+            <li>compare_releases</li>
+            <li>get_release_issues</li>
+          </ul>
+        </div>
+        <div class="tools-col">
+          <h3>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Users <span class="count">(2)</span>
+          </h3>
+          <ul>
+            <li>search_users</li>
+            <li>get_user</li>
+          </ul>
+        </div>
+        <div class="tools-col">
+          <h3>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+            Organizations <span class="count">(2)</span>
+          </h3>
+          <ul>
+            <li>get_organization</li>
+            <li>get_organization_stats</li>
+          </ul>
+        </div>
+        <div class="tools-col">
+          <h3>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            Diagnostics <span class="count">(3)</span>
+          </h3>
+          <ul>
+            <li>get_project_health</li>
+            <li>get_project_stats</li>
+            <li>ping</li>
+          </ul>
+        </div>
+      </div>
+      <div class="tools-link">
+        <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp" target="_blank">See all tools and schemas on GitHub →</a>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="container">
+      <div class="section-header">
+        <h2>Trust &amp; Safety</h2>
+        <p>Your data stays your data.</p>
+      </div>
+      <div class="trust-grid">
         <div class="trust-item">
-          <div class="trust-check">&#10003;</div>
-          <div>
-            <strong>No data leaves your instance</strong>
-            <span>All API calls go directly to your self-hosted Sentry. No proxy, no third party.</span>
+          <div class="trust-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
           </div>
+          <h3>Self-hosted</h3>
+          <p>Runs against your Sentry instance. No data leaves your network.</p>
         </div>
         <div class="trust-item">
-          <div class="trust-check">&#10003;</div>
-          <div>
-            <strong>Token-scoped access</strong>
-            <span>Uses Sentry auth tokens with configurable scope. No admin credentials stored.</span>
+          <div class="trust-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
           </div>
+          <h3>Token-based auth</h3>
+          <p>Uses your Sentry Auth Token. No password. No storage.</p>
         </div>
         <div class="trust-item">
-          <div class="trust-check">&#10003;</div>
-          <div>
-            <strong>Output filtering by default</strong>
-            <span>Every tool extracts only essential fields. Full payloads available on demand with grep filtering.</span>
+          <div class="trust-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
           </div>
+          <h3>Read-only by default</h3>
+          <p>All tools are read-only. Safe for production.</p>
+        </div>
+        <div class="trust-item">
+          <div class="trust-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          </div>
+          <h3>Open source</h3>
+          <p>Transparent and auditable. Built with security in mind.</p>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="cta">
+  <div class="cta-section">
     <div class="container">
-      <h2>Ready to connect your Sentry</h2>
-      <p>Open-source, MIT licensed. Install in under a minute.</p>
-      <div class="hero-actions">
-        <a class="btn btn-primary" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp">View on GitHub</a>
-        <a class="btn btn-secondary" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp/releases/tag/v1.1.3">Latest release</a>
+      <div class="cta-left">
+        <h2>Supercharge your Sentry workflow with AI.</h2>
+        <p>Join developers using sentry-selfhosted-mcp to ship faster.</p>
+      </div>
+      <div class="cta-right">
+        <div class="cta-card">
+          <a class="btn btn-dark" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp" target="_blank">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+            View on GitHub
+          </a>
+          <div class="repo-name">HieuAnh87/sentry-selfhosted-mcp</div>
+        </div>
+        <div class="cta-card cta-card-light">
+          <div class="release-label">Latest release <span class="pill">v1.1.3</span></div>
+          <a class="all-releases" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp/releases" target="_blank">See all releases →</a>
+        </div>
       </div>
     </div>
-  </section>
+  </div>
 
   <footer>
     <div class="container">
-      <p>sentry-selfhosted-mcp &middot; MIT License &middot; <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp">GitHub</a></p>
+      <div class="footer-left">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        sentry-selfhosted-mcp
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp" target="_blank">Documentation</a>
+        <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp/releases" target="_blank">Changelog</a>
+        <a href="#">Security</a>
+        <a href="#">Contributing</a>
+        <a href="#">License (MIT)</a>
+      </div>
+      <div class="footer-right">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+      </div>
     </div>
   </footer>
 
