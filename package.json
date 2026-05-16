@@ -1,6 +1,6 @@
 {
   "name": "selfhosted-sentry-mcp",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "Model context protocol server for self-hosted Sentry instances with debugging tools.",
   "license": "MIT",
   "author": "hieuda",
@@ -42,6 +42,7 @@
     "axios": "^1.8.4"
   },
   "devDependencies": {
+    "nock": "^14.0.10",
     "@types/node": "^20.11.24",
     "typescript": "^5.3.3"
   }

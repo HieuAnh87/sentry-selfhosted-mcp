@@ -18,7 +18,7 @@ FROM node:20-alpine AS production
 # OCI labels for better container management
 LABEL org.opencontainers.image.title="sentry-selfhosted-mcp"
 LABEL org.opencontainers.image.description="MCP server for self-hosted Sentry instances"
-LABEL org.opencontainers.image.version="1.0.0"
+LABEL org.opencontainers.image.version="1.2.0"
 LABEL org.opencontainers.image.source="https://github.com/HieuAnh87/sentry-selfhosted-mcp"
 LABEL org.opencontainers.image.licenses="MIT"
 LABEL org.opencontainers.image.vendor="hieuda"

@@ -66,20 +66,55 @@ npm run build
 
 ## Tools
 
-| Tool | Purpose | Input (summary) |
+**24 tools available** across 6 categories:
+
+### Issue Tools
+| Tool | Purpose | Input |
 | --- | --- | --- |
-| `get_sentry_issue` | Issue details by ID or URL with optional latest event | `issue_id_or_url` + optional filters |
+| `get_sentry_issue` | Issue details by ID or URL | `issue_id_or_url` + optional filters |
 | `list_sentry_projects` | List all projects in org | `{}` |
-| `list_sentry_issues` | List issues in a project with query/status | `project_slug` + optional `query`, `status`, `limit`, `cursor` |
-| `get_sentry_event_details` | Event details with pagination and entry filtering | `project_slug`, `event_id`, optional `entry_type`, `limit`, `offset` |
+| `list_sentry_issues` | List issues in a project | `project_slug` + optional filters |
+| `list_issues` | Search issues with Sentry query syntax | `query`, `sort`, `limit`, `cursor` |
 | `update_sentry_issue_status` | Update issue status | `issue_id`, `status` |
 | `create_sentry_issue_comment` | Add issue comment | `issue_id`, `comment_text` |
-| `raw_sentry_api` | Raw Sentry API call with optional grep filter | `endpoint` + optional `method`, `params`, `body`, `grep_pattern` |
-| `get_stack_frames` | Extract structured stack frames | `project_slug`, `event_id`, optional `in_app_only`, `max_frames` |
-| `check_dsym_status` | Check missing dSYM symbols | `project_slug`, optional `event_id` |
+| `get_issue_hashes` | Get fingerprint hashes | `issue_id`, optional `cursor` |
+| `bulk_update_issues` | Bulk resolve/ignore issues | `project_slug` + optional `query`, `status`, `assigned_to` |
+| `get_issue_tags` | List all tags for an issue | `issue_id` |
+| `get_issue_tag_values` | Get tag value distribution | `issue_id`, `tag_key`, optional `limit` |
+| `list_activity` | Issue activity log | `issue_id`, optional `limit`, `cursor` |
+
+### Event Tools
+| Tool | Purpose | Input |
+| --- | --- | --- |
+| `get_sentry_event_details` | Event details with entry filtering | `project_slug`, `event_id` |
 | `list_issue_events` | List events for an issue | `issue_id`, optional `limit`, `cursor`, `full` |
-| `get_issue_hashes` | Fetch fingerprint hashes for grouping | `issue_id`, optional `cursor` |
-| `list_error_events` | Search error events in a project | `project_slug`, optional `limit`, `cursor`, `query`, `full` |
+| `list_error_events` | Search error events in a project | `project_slug` + optional filters |
+| `get_stack_frames` | Extract structured stack frames | `project_slug`, `event_id`, `in_app_only`, `max_frames` |
+| `check_dsym_status` | Check missing dSYM symbols | `project_slug`, optional `event_id` |
+| `list_breadcrumbs` | Extract breadcrumbs from event | `project_slug`, `event_id`, optional `limit`, `type` |
+
+### Release Tools
+| Tool | Purpose | Input |
+| --- | --- | --- |
+| `list_releases` | List releases in org | `query`, `date`, `limit`, `sort` |
+| `get_release_details` | Release details with health stats | `version`, optional `full` |
+
+### Organization Tools
+| Tool | Purpose | Input |
+| --- | --- | --- |
+| `list_teams` | List all teams in org | `{}` |
+
+### Advanced Tools
+| Tool | Purpose | Input |
+| --- | --- | --- |
+| `get_trace_details` | Distributed trace with spans | `trace_id`, optional `max_spans` |
+| `get_grouping_config` | Fingerprinting rules | `issue_id` |
+| `merge_issues` | Merge issues by hash | `issue_id`, `target_ids` |
+
+### Raw API
+| Tool | Purpose | Input |
+| --- | --- | --- |
+| `raw_sentry_api` | Any Sentry API endpoint | `endpoint` + optional `method`, `params`, `body`, `grep_pattern` |
 
 ## Configuration
 
