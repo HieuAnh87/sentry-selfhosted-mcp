@@ -4,6 +4,7 @@ import { AxiosError } from 'axios';
 import { sentryClient } from '../api/client.js';
 import { ORG_SLUG } from '../config.js';
 import { truncateResponse } from '../helpers/truncate.js';
+import type { PageInfo } from '../helpers/pagination.js';
 import { filterObjectFields } from '../helpers/filter.js';
 import { extractEssentialIssueFields, extractEssentialEventEntry } from '../helpers/extract.js';
 import { grepFilter, estimateTokens, generateGrepSuggestions } from '../helpers/grep.js';
@@ -220,15 +221,29 @@ const extractEssentialHash = (hash: unknown): unknown => {
 
 /**
  * Serialize a payload as tool text, prepending the truncation note when one applies.
+ * When another page exists, its cursor goes in a second content block so the
+ * first block keeps its existing shape for callers that parse it.
  */
-export function truncatedTextResult(payload: unknown): ToolResult {
+export function truncatedTextResult(payload: unknown, page?: PageInfo): ToolResult {
   const { data, truncated, pagination_info } = truncateResponse(payload);
   let resultText = JSON.stringify(data, null, 2);
   if (truncated && pagination_info) {
     resultText = `${pagination_info}\n\n${resultText}`;
   }
 
-  return { content: [{ type: 'text', text: resultText }] };
+  const content: ToolResult['content'] = [{ type: 'text', text: resultText }];
+  if (page?.hasMore && page.nextCursor) {
+    content.push({
+      type: 'text',
+      text: JSON.stringify({
+        next_cursor: page.nextCursor,
+        has_more: true,
+        hint: 'More results exist. Call this tool again with cursor set to next_cursor.',
+      }),
+    });
+  }
+
+  return { content };
 }
 
 const mapAxiosError = (error: AxiosError, toolName: string): string => {
@@ -274,7 +289,7 @@ export async function handleGetSentryIssue(args: unknown): Promise<ToolResult> {
           id: eventResponse.id,
           eventID: eventResponse.eventID,
           dateCreated: eventResponse.dateCreated,
-          entries: eventResponse.entries.slice(0, 3).map(extractEssentialEventEntry),
+          entries: eventResponse.entries.slice(0, 3).map(entry => extractEssentialEventEntry(entry)),
           _note: 'Event truncated. Use get_sentry_event_details for full event data.',
         };
       } else {

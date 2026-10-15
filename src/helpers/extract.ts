@@ -39,7 +39,13 @@ export function extractEssentialIssueFields(issueData: unknown): Record<string, 
  * Extract essential fields from event entries (exception, message, breadcrumbs).
  * Reduces size while keeping debugging-relevant information.
  */
-export function extractEssentialEventEntry(entry: unknown): unknown {
+export interface ExtractEntryOptions {
+  /** Innermost frames kept per exception (default 5). */
+  maxFrames?: number;
+}
+
+export function extractEssentialEventEntry(entry: unknown, options: ExtractEntryOptions = {}): unknown {
+  const maxFrames = options.maxFrames ?? 5;
   if (!entry || typeof entry !== 'object') return { _truncated: true };
 
   const e = entry as Record<string, unknown>;
@@ -59,7 +65,7 @@ export function extractEssentialEventEntry(entry: unknown): unknown {
               value: excData.value,
               mechanism: excData.mechanism,
               stacktrace: frames ? {
-                frames: frames.slice(-5).map((frame: unknown) => {
+                frames: frames.slice(-maxFrames).map((frame: unknown) => {
                   const f = frame as Record<string, unknown>;
                   const context = f.context as unknown[] | undefined;
                   return {

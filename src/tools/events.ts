@@ -186,7 +186,7 @@ export async function handleGetSentryEventDetails(args: unknown): Promise<ToolRe
       selectedEntries = importantEntries;
     }
 
-    const extractedEntries = selectedEntries.map(extractEssentialEventEntry);
+    const extractedEntries = selectedEntries.map(entry => extractEssentialEventEntry(entry));
     eventData.entries = extractedEntries as SentryEvent['entries'];
     (eventData as Record<string, unknown>).pagination_info = {
       total_entries: totalEntries,
