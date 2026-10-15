@@ -96,6 +96,22 @@ const trimReleaseStats = (release: SentryRelease): Record<string, unknown> => {
   };
 };
 
+/** One release in a list: identity, dates, new-issue count, and project slugs. */
+const compactRelease = (release: SentryRelease): Record<string, unknown> => ({
+  version: release.version,
+  shortVersion: release.shortVersion,
+  dateCreated: release.dateCreated,
+  dateReleased: release.dateReleased,
+  newGroups: release.newGroups,
+  projects: Array.isArray(release.projects)
+    ? release.projects.map(project =>
+        project !== null && typeof project === 'object' ? (project as Record<string, unknown>).slug : project
+      )
+    : undefined,
+  firstEvent: release.firstEvent,
+  lastEvent: release.lastEvent,
+});
+
 // ============================================================
 // Tool Handlers
 // ============================================================
@@ -105,18 +121,24 @@ export async function handleListReleases(args: unknown): Promise<ToolResult> {
     throw new McpError(ErrorCode.InvalidParams, 'Invalid args for list_releases.');
   }
 
-  const params: Record<string, string | number> = {};
+  // Sentry pages with `per_page`; `limit` is ignored there but kept for compatibility.
+  const limit = args.limit ?? 25;
+  const params: Record<string, string | number> = { limit, per_page: limit };
   if (args.query) params.query = args.query;
   if (args.date) params.date = args.date;
-  if (args.limit !== undefined) params.limit = args.limit;
   if (args.cursor) params.cursor = args.cursor;
   if (args.sort) params.sort = args.sort;
-  if (params.limit === undefined) params.limit = 25;
 
   console.error(`Listing releases in org ${ORG_SLUG}`);
-  const response = (await sentryClient.listReleases(ORG_SLUG, params)).data;
+  const page = await sentryClient.listReleases(ORG_SLUG, params);
+  const raw: unknown = page.data;
+  const releases = (Array.isArray(raw) ? raw : []).map(compactRelease);
 
-  return truncatedTextResult(response);
+  return truncatedTextResult({
+    returned_releases: releases.length,
+    releases,
+    _note: 'Compact view. Use get_release_details with a version for commits, deploys and stats.',
+  }, page);
 }
 
 export async function handleGetReleaseDetails(args: unknown): Promise<ToolResult> {
