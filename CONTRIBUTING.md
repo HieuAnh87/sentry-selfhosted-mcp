@@ -92,6 +92,7 @@ No real `SENTRY_AUTH_TOKEN` values and no real Sentry hostnames in code, tests, 
 - **ESM with explicit `.js` extensions** in TypeScript imports (`import { x } from './helpers/index.js'`) — required by Node16 module resolution. Importing without the extension will compile and then fail at runtime.
 - `src/index.ts` is intentionally a thin re-export of `./server.js`; keep it that way.
 - Handlers return `{ content: [{ type: 'text', text: ... }] }`; errors go through `handleToolError`, and invalid arguments throw `McpError(ErrorCode.InvalidParams, ...)`.
+- List methods on `SentryApiClient` return `{ data, nextCursor, hasMore }`. Pass that page info to `truncatedTextResult(payload, page)`, which appends a second content block `{ next_cursor, has_more, hint }` when another page exists. Keep the payload in `content[0]` so existing clients keep working.
 
 ## Pull requests
 

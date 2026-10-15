@@ -375,6 +375,14 @@
       font-weight: 700;
       margin-bottom: 4px;
     }
+    .quickstart .version-note {
+      margin-top: 24px;
+      padding: 12px 14px;
+      border-left: 3px solid var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+    }
     .quickstart .subtitle {
       color: var(--text-secondary);
       font-size: 14px;
@@ -408,7 +416,8 @@
       font-size: 13px;
       color: var(--text-secondary);
     }
-    .step p code {
+    .step p code,
+    .quickstart .version-note code {
       font-family: "SF Mono", "Fira Code", monospace;
       font-size: 12px;
       background: var(--border-light);
@@ -784,7 +793,7 @@
       <div class="hero-content">
         <div class="hero-label">MCP Server for Self-Hosted Sentry</div>
         <h1>Bring your Sentry data to AI assistants.</h1>
-        <p class="hero-desc">Triage issues, read stack frames, trace breadcrumbs and check debug symbols in your self-hosted Sentry. 24 tools, built so agents stay inside their context window: responses are filtered, truncated and capped at 50k tokens by default.</p>
+        <p class="hero-desc">Triage issues, read stack frames, trace breadcrumbs and check debug symbols in your self-hosted Sentry. 24 tools, built so agents stay inside their context window: compact by default, with filters, grep and pagination to narrow further, and a 50k-token budget on list and detail tools.</p>
         <div class="hero-actions">
           <a class="btn btn-dark" href="#quickstart">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
@@ -861,8 +870,8 @@
           <div class="problem-icon">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           </div>
-          <h3>Data stays in your network</h3>
-          <p>The server talks to your Sentry instance directly. Nothing is proxied through a third party.</p>
+          <h3>Direct to your Sentry</h3>
+          <p>The server talks only to your Sentry instance. Tool results go to whichever LLM client you connect, and on to its model provider.</p>
         </div>
         <div class="problem-item">
           <div class="problem-icon">
@@ -915,14 +924,14 @@
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
           </div>
           <h3>Grouping &amp; releases</h3>
-          <p>Fingerprint hashes, grouping rules, release health and distributed traces.</p>
+          <p>Fingerprint hashes, per-event grouping breakdowns, release health and distributed traces.</p>
         </div>
         <div class="cap-item">
           <div class="cap-icon">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2a10 10 0 1010 10H12V2z"/><path d="M20.66 8A10 10 0 0014 2.05V8h6.66z"/></svg>
           </div>
           <h3>Token-aware</h3>
-          <p>Field filters, grep patterns, stack truncation and a 50k-token ceiling.</p>
+          <p>Field filters, grep patterns, stack truncation and cursor pagination. List and detail tools apply a 50k-token budget.</p>
         </div>
       </div>
     </div>
@@ -956,6 +965,7 @@
             </div>
           </div>
         </div>
+        <p class="version-note"><strong>Version note:</strong> npm <code>latest</code> is still 1.1.2, which has 12 of the 24 tools and silently ignores <code>SENTRY_READ_ONLY</code>. Until 1.2.0 is published, use a <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp#3-install" target="_blank" rel="noopener">source build</a> or the <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp#docker" target="_blank" rel="noopener">Docker image</a> for read-only mode and the full tool set.</p>
       </div>
       <div class="code-block">
         <div class="code-tabs" role="tablist" aria-label="MCP client configuration examples">
@@ -1041,7 +1051,7 @@
         </div>
         <div class="code-footer">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-          The npm package is <strong>selfhosted-sentry-mcp</strong>. This file holds a live Sentry token — keep it out of version control.
+          The npm package is <strong>selfhosted-sentry-mcp</strong>. This file holds a live Sentry token — keep it out of version control. Read-only mode needs 1.2.0 or a source build.
         </div>
       </div>
     </div>
@@ -1141,7 +1151,7 @@
     <div class="container">
       <div class="section-header">
         <h2>Trust &amp; Safety</h2>
-        <p>Your data stays your data.</p>
+        <p>Know where your data goes.</p>
       </div>
       <div class="trust-grid">
         <div class="trust-item">
@@ -1149,7 +1159,7 @@
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
           </div>
           <h3>Self-hosted</h3>
-          <p>Runs against your Sentry instance. No data leaves your network.</p>
+          <p>Runs on your machine and talks only to your Sentry instance. Results are sent to whatever LLM client you connect.</p>
         </div>
         <div class="trust-item">
           <div class="trust-icon">
@@ -1163,7 +1173,7 @@
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
           </div>
           <h3>Read-only mode</h3>
-          <p>Five tools can write to Sentry. <code>SENTRY_READ_ONLY=true</code> blocks them; it is opt-in, not the default.</p>
+          <p>Five tools can write to Sentry. <code>SENTRY_READ_ONLY=true</code> blocks them; it is opt-in, not the default. Bulk updates refuse to run without a query or an explicit ID list.</p>
         </div>
         <div class="trust-item">
           <div class="trust-icon">
@@ -1180,7 +1190,7 @@
     <div class="container">
       <div class="cta-left">
         <h2>Supercharge your Sentry workflow with AI.</h2>
-        <p>Install <strong>selfhosted-sentry-mcp</strong> from npm and point it at your Sentry instance.</p>
+        <p>Install <strong>selfhosted-sentry-mcp</strong> from npm, or build from source for read-only mode until 1.2.0 ships, and point it at your Sentry instance.</p>
       </div>
       <div class="cta-right">
         <div class="cta-card">

@@ -16,13 +16,13 @@ Everything below follows from that.
 
 Sentry's scope namespaces are `org:*`, `project:*`, `team:*`, `member:*` and `event:*`. Grant the narrowest set that covers the tools you intend to use.
 
-**Read-only token** — covers 23 of the 24 tools:
+**Read-only token** — covers 20 of the 24 tools (everything except the four write tools; `raw_sentry_api` is among the 20, limited to what these scopes allow):
 
 | Scope | Why |
 | --- | --- |
-| `event:read` | All issue and event reads |
+| `event:read` | All issue and event reads, including traces (`get_trace_details`) |
 | `org:read` | Organization-level listings |
-| `project:read` | Project listing |
+| `project:read` | Project listing; event grouping info (`get_grouping_config`) |
 | `team:read` | Team listing |
 | `project:releases` | Release endpoints |
 
@@ -56,6 +56,8 @@ Setting `SENTRY_READ_ONLY` to `true` or `1` blocks writes:
 | The other 19 tools | Unaffected — all are reads |
 
 **It is opt-in and defaults to `false`**, for backward compatibility with existing installs. If you do nothing, the write tools are exposed.
+
+**It is not in npm release 1.1.2**, the current `latest`. That version ignores `SENTRY_READ_ONLY` without warning, so a config that sets it still runs with every write path open — including `raw_sentry_api` with `POST`, `PUT` and `DELETE`. Until 1.2.0 is published, build from source or use the Docker image (see the README), and rely on the token's scopes in any case.
 
 ```json
 "env": {
@@ -94,7 +96,7 @@ If a token has already been committed: **rotate it first** (Sentry Settings → 
 - **Use TLS.** `SENTRY_URL` should be `https://`. The token is sent as a bearer credential on every request.
 - **MCP client logs.** The server writes diagnostics to stderr, including endpoint paths, issue IDs and project slugs. It does not log the token, but it does log what you queried. Treat client log files as sensitive.
 - **Untrusted content.** Issue titles, comments, breadcrumb messages and stack frames are attacker-influenced in any application that accepts user input. An agent reading them is reading untrusted text. Do not let it act on instructions found in Sentry data.
-- **`bulk_update_issues` is broad.** Omitting `query` targets every issue in the project. **`merge_issues` is not reversible.** Both need `event:write`; withholding that scope is the reliable way to prevent them.
+- **`bulk_update_issues` is broad.** It refuses to run without a non-empty `query` or an `issue_ids` list, because Sentry applies an unselected bulk update to every unresolved issue in the project (up to 1000) — but a broad `query` can still match hundreds of issues. **`merge_issues` is not reversible**, and Sentry, not the caller, decides which issue survives. Both need `event:write`; withholding that scope is the reliable way to prevent them.
 
 ## Supported versions
 

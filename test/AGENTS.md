@@ -45,5 +45,8 @@ SENTRY_MCP_TEST_ENTRY=/path/to/pkg/build/index.js node --test test/tools.test.js
   to `*` and the runner silently skips every nested file. Bare `node --test` discovers everything.
 - Tests import from `build/`, not `src/`. `pretest` rebuilds, so `npm test` cannot pass against a
   stale build; invoking `node --test` directly can.
+- Tool results can carry a second text content block with `{next_cursor, has_more, hint}` when Sentry's `Link`
+  header reports another page. Assert on `content[0]` for the payload and on `content[1]` for pagination; to
+  exercise it, have the stub reply with a `Link` header containing `rel="next"; results="true"; cursor="..."`.
 - `nock.replyWithError` needs a real `Error` object. Given a plain object it does not fail the socket
   promptly, and the request instead hangs until axios' 20s timeout.
