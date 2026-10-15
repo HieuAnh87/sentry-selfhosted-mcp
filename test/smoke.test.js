@@ -1,173 +1,137 @@
 #!/usr/bin/env node
 
 /**
- * Smoke test for sentry-selfhosted-mcp server
- * Tests that the MCP server starts and responds to basic protocol messages
+ * Smoke test: the built server starts and speaks MCP over stdio.
+ *
+ * Deliberately shallow — tool schemas are covered by test/tools.test.js and
+ * behaviour by test/e2e/. This is the "is the artifact runnable at all" check,
+ * which is also what the packaging job in CI runs against an installed tarball.
+ *
+ * Runs both under `node --test` and directly via `npm run test:smoke`; failures
+ * are assertions, so the runner reports which check failed and why.
  */
 
-import { spawn } from 'child_process';
-import { setTimeout } from 'timers/promises';
+import { describe, it, before, after } from 'node:test';
+import assert from 'node:assert';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
+import fs from 'node:fs';
 
-const TEST_TIMEOUT = 10000; // 10 seconds
+import { McpServerProcess, SERVER_ENTRY } from './support/harness.js';
 
-async function smokeTest() {
-  console.log('🧪 Running smoke test for sentry-selfhosted-mcp...\n');
+describe('smoke: built server', () => {
+  /** @type {McpServerProcess} */
+  let server;
 
-  // Set test environment variables
-  const env = {
-    ...process.env,
-    SENTRY_URL: 'https://test-sentry.example.com',
+  before(async () => {
+    server = await McpServerProcess.start();
+  });
+
+  after(async () => {
+    await server?.stop();
+  });
+
+  it('has a built entry point', () => {
+    assert.ok(fs.existsSync(SERVER_ENTRY), `missing build artifact: ${SERVER_ENTRY}. Run npm run build.`);
+  });
+
+  it('responds to initialize with its server info', async () => {
+    const envelope = await server.send('initialize', {
+      protocolVersion: '2024-11-05',
+      capabilities: {},
+      clientInfo: { name: 'smoke-test', version: '1.0.0' },
+    });
+
+    assert.strictEqual(envelope.error, undefined, `initialize failed: ${JSON.stringify(envelope.error)}`);
+    assert.strictEqual(envelope.result.serverInfo.name, 'sentry-selfhosted-mcp');
+    assert.ok(envelope.result.serverInfo.version, 'server should report a version');
+    assert.ok(envelope.result.capabilities.tools, 'server should advertise tool capability');
+  });
+
+  it('responds to tools/list with a non-empty tool array', async () => {
+    const tools = await server.listTools();
+
+    assert.ok(Array.isArray(tools), 'tools/list should return an array');
+    assert.ok(tools.length > 0, 'tools/list should not be empty');
+  });
+
+  it('exposes the core debugging tools', async () => {
+    const toolNames = (await server.listTools()).map((tool) => tool.name);
+
+    const expected = [
+      'get_sentry_issue',
+      'list_sentry_projects',
+      'list_sentry_issues',
+      'get_sentry_event_details',
+      'update_sentry_issue_status',
+      'create_sentry_issue_comment',
+      'raw_sentry_api',
+      'get_stack_frames',
+      'check_dsym_status',
+      'list_issue_events',
+      'get_issue_hashes',
+      'list_error_events',
+    ];
+
+    const missing = expected.filter((name) => !toolNames.includes(name));
+    assert.deepStrictEqual(missing, [], `missing tools: ${missing.join(', ')}`);
+  });
+
+  it('responds to resources/list', async () => {
+    const envelope = await server.send('resources/list');
+
+    assert.strictEqual(envelope.error, undefined, `resources/list failed: ${JSON.stringify(envelope.error)}`);
+    assert.ok(Array.isArray(envelope.result.resources));
+  });
+});
+
+describe('smoke: startup configuration', () => {
+  /** Start the built server with a deliberately incomplete environment. */
+  async function startWith(env) {
+    const child = spawn(process.execPath, [SERVER_ENTRY], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      // A bare environment, so a value in the developer's shell cannot mask a failure.
+      env: { PATH: process.env.PATH, ...env },
+    });
+
+    let stderr = '';
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+
+    const [code] = await once(child, 'exit');
+    return { code, stderr };
+  }
+
+  const required = ['SENTRY_URL', 'SENTRY_AUTH_TOKEN', 'SENTRY_ORG_SLUG'];
+  const complete = {
+    SENTRY_URL: 'https://sentry.example.com',
     SENTRY_AUTH_TOKEN: 'test-token',
     SENTRY_ORG_SLUG: 'test-org',
   };
 
-  // Start the MCP server
-  const server = spawn('node', ['build/index.js'], {
-    env,
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
+  for (const missing of required) {
+    it(`refuses to start without ${missing}`, async () => {
+      const env = { ...complete };
+      delete env[missing];
 
-  let stdout = '';
-  let stderr = '';
-  let passed = 0;
-  let failed = 0;
+      const { code, stderr } = await startWith(env);
 
-  server.stdout.on('data', (data) => {
-    stdout += data.toString();
-  });
-
-  server.stderr.on('data', (data) => {
-    stderr += data.toString();
-  });
-
-  try {
-    // Wait for server to initialize
-    await setTimeout(1000);
-
-    // Test 1: Server is running
-    console.log('✓ Test 1: Server started successfully');
-    passed++;
-
-    // Test 2: Send tools/list request
-    console.log('\n✓ Test 2: Sending tools/list request...');
-    const toolsListRequest = JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/list',
-      params: {},
-    }) + '\n';
-
-    server.stdin.write(toolsListRequest);
-    await setTimeout(2000);
-
-    // Check if we got a response
-    if (stdout.includes('"result"') || stdout.includes('"tools"')) {
-      console.log('✓ Test 2: Server responded to tools/list');
-      passed++;
-
-      // Check if tools array is present and has expected tools
-      try {
-        const responseMatch = stdout.match(/\{.*\}/s);
-        if (responseMatch) {
-          const response = JSON.parse(responseMatch[0]);
-          if (response.result && response.result.tools && Array.isArray(response.result.tools)) {
-            const toolCount = response.result.tools.length;
-            console.log(`  ✓ Found ${toolCount} tools`);
-
-            // Check for specific tools
-            const toolNames = response.result.tools.map((t) => t.name);
-            const expectedTools = [
-              'get_sentry_issue',
-              'list_sentry_projects',
-              'list_sentry_issues',
-              'get_sentry_event_details',
-              'update_sentry_issue_status',
-              'create_sentry_issue_comment',
-              'raw_sentry_api',
-              'get_stack_frames',
-              'check_dsym_status',
-              'list_issue_events',
-              'get_issue_hashes',
-              'list_error_events',
-            ];
-
-            const missingTools = expectedTools.filter((t) => !toolNames.includes(t));
-            if (missingTools.length === 0) {
-              console.log('  ✓ All expected tools are present');
-              passed++;
-            } else {
-              console.log(`  ✗ Missing tools: ${missingTools.join(', ')}`);
-              failed++;
-            }
-          }
-        }
-      } catch (e) {
-        console.log('  ✗ Could not parse tools/list response');
-        failed++;
-      }
-    } else {
-      console.log('✗ Test 2: No response from server');
-      failed++;
-    }
-
-    // Test 3: Initialize request
-    console.log('\n✓ Test 3: Sending initialize request...');
-    stdout = ''; // Clear buffer
-    const initRequest = JSON.stringify({
-      jsonrpc: '2.0',
-      id: 2,
-      method: 'initialize',
-      params: {
-        protocolVersion: '2024-11-05',
-        capabilities: {},
-        clientInfo: {
-          name: 'test-client',
-          version: '1.0.0',
-        },
-      },
-    }) + '\n';
-
-    server.stdin.write(initRequest);
-    await setTimeout(2000);
-
-    if (stdout.includes('"result"') || stdout.includes('serverInfo')) {
-      console.log('✓ Test 3: Server responded to initialize');
-      passed++;
-    } else {
-      console.log('✗ Test 3: No initialize response');
-      failed++;
-    }
-  } catch (error) {
-    console.error(`\n✗ Test error: ${error.message}`);
-    failed++;
-  } finally {
-    // Cleanup
-    server.stdin.end();
-    await setTimeout(500);
-    server.kill();
+      assert.notStrictEqual(code, 0, `server should exit non-zero without ${missing}`);
+      assert.match(stderr, new RegExp(missing), `startup error should name ${missing}`);
+    });
   }
 
-  // Summary
-  console.log('\n' + '='.repeat(50));
-  console.log(`Tests passed: ${passed}`);
-  console.log(`Tests failed: ${failed}`);
-  console.log('='.repeat(50));
+  it('refuses to start with a malformed SENTRY_URL', async () => {
+    const { code, stderr } = await startWith({ ...complete, SENTRY_URL: 'not-a-url' });
 
-  if (failed > 0) {
-    console.log('\n❌ Smoke test failed');
-    if (stderr) {
-      console.log('\nServer stderr:');
-      console.log(stderr);
-    }
-    process.exit(1);
-  } else {
-    console.log('\n✅ All smoke tests passed!');
-    process.exit(0);
-  }
-}
+    assert.notStrictEqual(code, 0, 'server should exit non-zero for an invalid URL');
+    assert.match(stderr, /SENTRY_URL/);
+  });
 
-// Run the test
-smokeTest().catch((error) => {
-  console.error('Fatal error:', error);
-  process.exit(1);
+  it('does not print the auth token when startup fails', async () => {
+    const token = 'sntrys-SECRET-STARTUP-TOKEN';
+    const { stderr } = await startWith({ SENTRY_URL: 'https://sentry.example.com', SENTRY_AUTH_TOKEN: token });
+
+    assert.ok(!stderr.includes(token), `startup error leaked the auth token:\n${stderr}`);
+  });
 });

@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # 20 is the engines floor; 22 is current LTS.
+    name: Build & test (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['20', '22']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        # Explicit, so a TypeScript error is reported as a build failure rather
+        # than surfacing later as a confusing test failure.
+        run: npm run build
+
+      - name: Test
+        run: npm test
+
+  package:
+    # Everything above tests the working tree. This tests what users actually
+    # install: the packed tarball, its bin entry, and its runtime dependencies.
+    name: Package smoke test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Pack
+        id: pack
+        run: echo "tarball=$(npm pack --silent | tail -1)" >> "$GITHUB_OUTPUT"
+
+      - name: Show packed contents
+        run: tar -tzf "${{ steps.pack.outputs.tarball }}" | sort
+
+      - name: Install the tarball into a clean project
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/pkgtest
+          cd /tmp/pkgtest
+          npm init -y > /dev/null
+          npm install "$GITHUB_WORKSPACE/${{ steps.pack.outputs.tarball }}"
+
+      - name: The published package must contain a built entry point
+        run: test -f /tmp/pkgtest/node_modules/selfhosted-sentry-mcp/build/index.js
+
+      - name: Run the tool contract and smoke tests against the installed package
+        # Same suites as the test job, pointed at the installed artifact instead
+        # of the working tree: catches anything missing from "files" and any
+        # runtime dependency that is only present as a devDependency.
+        env:
+          SENTRY_MCP_TEST_ENTRY: /tmp/pkgtest/node_modules/selfhosted-sentry-mcp/build/index.js
+        run: node --test test/tools.test.js test/smoke.test.js
+
+      - name: The installed bin must run as a command and serve tools/list
+        # How an MCP client actually launches the server (npx / a bin path), as
+        # opposed to `node build/index.js`. Requires the bin entry to start with
+        # a `#!/usr/bin/env node` shebang.
+        run: |
+          set -euo pipefail
+          bin=/tmp/pkgtest/node_modules/.bin/selfhosted-sentry-mcp
+          test -x "$bin"
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
+            | SENTRY_URL=https://sentry.example.com \
+              SENTRY_AUTH_TOKEN=ci-token \
+              SENTRY_ORG_SLUG=ci-org \
+              "$bin" > /tmp/tools-list.json
+          grep -q '"raw_sentry_api"' /tmp/tools-list.json
+          node -e '
+            const { readFileSync } = require("node:fs");
+            const response = JSON.parse(readFileSync("/tmp/tools-list.json", "utf8"));
+            const count = response.result.tools.length;
+            if (count !== 24) throw new Error(`expected 24 tools from the installed bin, got ${count}`);
+            console.log(`installed bin served ${count} tools`);
+          '
