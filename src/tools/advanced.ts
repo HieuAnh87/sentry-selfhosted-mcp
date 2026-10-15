@@ -2,10 +2,13 @@
 
 import { sentryClient } from '../api/client.js';
 import { ORG_SLUG } from '../config.js';
-import { truncateResponse } from '../helpers/truncate.js';
 import type { ToolDefinition, ToolResult } from '../api/types.js';
 import { isValidGetTraceArgs, isValidMergeIssuesArgs, isValidGetGroupingConfigArgs } from '../helpers/index.js';
+import { truncatedTextResult } from './issues.js';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
+
+// Enhancement rule blobs can be many KB per config
+const MAX_ENHANCEMENTS_CHARS = 2000;
 
 // ============================================================
 // Tool Definitions
@@ -61,6 +64,28 @@ export const merge_issues_tool: ToolDefinition = {
 };
 
 // ============================================================
+// Utility Functions
+// ============================================================
+
+const truncateEnhancements = (enhancements?: string): string | undefined => {
+  if (!enhancements || enhancements.length <= MAX_ENHANCEMENTS_CHARS) return enhancements;
+  const omitted = enhancements.length - MAX_ENHANCEMENTS_CHARS;
+  return `${enhancements.slice(0, MAX_ENHANCEMENTS_CHARS)}\n... [${omitted} more characters omitted]`;
+};
+
+const readMergeOutcome = (response: unknown): { merged: boolean; parent?: string; children?: string[] } => {
+  const body = response && typeof response === 'object' ? response as Record<string, unknown> : undefined;
+  const merge = body?.merge as { parent?: string; children?: string[] } | undefined;
+
+  if (merge) {
+    return { merged: true, parent: merge.parent, children: merge.children };
+  }
+
+  // Sentry answers some merge requests with an empty body; anything else is unconfirmed.
+  return { merged: response === undefined || response === null || response === '' };
+};
+
+// ============================================================
 // Tool Handlers
 // ============================================================
 
@@ -100,20 +125,15 @@ export async function handleGetGroupingConfig(args: unknown): Promise<ToolResult
   console.error(`Fetching grouping config for issue ${args.issue_id}`);
   const configs = await sentryClient.getGroupingConfig(args.issue_id);
 
-  return {
-    content: [{
-      type: 'text',
-      text: JSON.stringify({
-        issue_id: args.issue_id,
-        configs: configs.map(cfg => ({
-          id: cfg.id,
-          name: cfg.name,
-          enhancements: cfg.enhancements,
-        })),
-        explanation: 'These are the fingerprinting rules that determine how events are grouped into issues. The first matching rule wins.',
-      }, null, 2),
-    }],
-  };
+  return truncatedTextResult({
+    issue_id: args.issue_id,
+    configs: configs.map(cfg => ({
+      id: cfg.id,
+      name: cfg.name,
+      enhancements: truncateEnhancements(cfg.enhancements),
+    })),
+    explanation: 'These are the fingerprinting rules that determine how events are grouped into issues. The first matching rule wins.',
+  });
 }
 
 export async function handleMergeIssues(args: unknown): Promise<ToolResult> {
@@ -124,16 +144,15 @@ export async function handleMergeIssues(args: unknown): Promise<ToolResult> {
   console.error(`Merging issues: ${args.issue_id} <- ${args.target_ids.join(', ')}`);
   const response = await sentryClient.mergeIssues(args.issue_id, args.target_ids);
 
-  return {
-    content: [{
-      type: 'text',
-      text: JSON.stringify({
-        merged: true,
-        primary_issue_id: args.issue_id,
-        merged_issue_ids: args.target_ids,
-        response,
-        explanation: 'Issues have been merged. All events from merged issues are now part of the primary issue.',
-      }, null, 2),
-    }],
-  };
+  const { merged, parent, children } = readMergeOutcome(response);
+
+  return truncatedTextResult({
+    merged,
+    primary_issue_id: parent || args.issue_id,
+    merged_issue_ids: children || args.target_ids,
+    response,
+    explanation: merged
+      ? 'Issues have been merged. All events from merged issues are now part of the primary issue.'
+      : 'Sentry did not confirm the merge. Inspect the response field and verify the issues in Sentry before relying on this.',
+  });
 }

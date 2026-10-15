@@ -198,6 +198,39 @@ const getIssueId = (input: string): string | null => {
   return null;
 };
 
+const errorMessage = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
+const extractEssentialHash = (hash: unknown): unknown => {
+  if (typeof hash === 'string') return { id: hash };
+  if (!hash || typeof hash !== 'object') return { _truncated: true };
+
+  const h = hash as Record<string, unknown>;
+  const latestEvent = h.latestEvent as Record<string, unknown> | undefined;
+  return {
+    id: h.id,
+    latestEvent: latestEvent ? {
+      id: latestEvent.id,
+      eventID: latestEvent.eventID,
+      dateCreated: latestEvent.dateCreated,
+      message: latestEvent.message || latestEvent.title,
+    } : undefined,
+  };
+};
+
+/**
+ * Serialize a payload as tool text, prepending the truncation note when one applies.
+ */
+export function truncatedTextResult(payload: unknown): ToolResult {
+  const { data, truncated, pagination_info } = truncateResponse(payload);
+  let resultText = JSON.stringify(data, null, 2);
+  if (truncated && pagination_info) {
+    resultText = `${pagination_info}\n\n${resultText}`;
+  }
+
+  return { content: [{ type: 'text', text: resultText }] };
+}
+
 const mapAxiosError = (error: AxiosError, toolName: string): string => {
   let message = `Sentry API error for ${toolName}: ${error.message}`;
   if (error.response) {
@@ -248,7 +281,9 @@ export async function handleGetSentryIssue(args: unknown): Promise<ToolResult> {
         combinedData.latest_event = eventResponse;
       }
     } catch (eventError) {
-      console.warn(`Could not fetch latest event for issue ${issueId}.`, eventError);
+      const message = errorMessage(eventError);
+      console.warn(`Could not fetch latest event for issue ${issueId}. ${message}`);
+      combinedData.latest_event_error = message;
     }
   }
 
@@ -270,7 +305,25 @@ export async function handleGetSentryIssue(args: unknown): Promise<ToolResult> {
 export async function handleListSentryProjects(): Promise<ToolResult> {
   console.error(`Fetching projects for org ${ORG_SLUG}`);
   const response = await sentryClient.listProjects(ORG_SLUG);
-  return { content: [{ type: 'text', text: JSON.stringify(response, null, 2) }] };
+
+  const projects = response.slice(0, 100).map(project => ({
+    id: project.id,
+    slug: project.slug,
+    name: project.name,
+    platform: project.platform,
+    dateCreated: project.dateCreated,
+    firstEvent: project.firstEvent,
+    teams: project.teams?.map(team => team.slug),
+  }));
+
+  return truncatedTextResult({
+    total_projects: response.length,
+    returned_projects: projects.length,
+    projects,
+    _note: projects.length < response.length
+      ? `Showing ${projects.length} of ${response.length} projects (essential fields only). Use raw_sentry_api to page through the full list.`
+      : undefined,
+  });
 }
 
 export async function handleListSentryIssues(args: unknown): Promise<ToolResult> {
@@ -281,20 +334,14 @@ export async function handleListSentryIssues(args: unknown): Promise<ToolResult>
   const params: Record<string, string | number> = {};
   if (args.query) params.query = args.query;
   if (args.status) params.query = `${params.query || ''} is:${args.status}`.trim();
-  if (args.limit) params.limit = args.limit;
+  if (args.limit !== undefined) params.limit = args.limit;
   if (args.cursor) params.cursor = args.cursor;
-  if (!params.limit) params.limit = 25;
+  if (params.limit === undefined) params.limit = 25;
 
   console.error(`Fetching issues for project ${args.project_slug} in org ${ORG_SLUG}`);
   const response = await sentryClient.listProjectIssues(ORG_SLUG, args.project_slug, params);
 
-  const { data, truncated, pagination_info } = truncateResponse(response);
-  let resultText = JSON.stringify(data, null, 2);
-  if (truncated && pagination_info) {
-    resultText = `${pagination_info}\n\n${resultText}`;
-  }
-
-  return { content: [{ type: 'text', text: resultText }] };
+  return truncatedTextResult(response);
 }
 
 export async function handleListIssues(args: unknown): Promise<ToolResult> {
@@ -305,20 +352,14 @@ export async function handleListIssues(args: unknown): Promise<ToolResult> {
   const params: Record<string, string | number> = {};
   if (args.query) params.query = args.query;
   if (args.sort) params.sort = args.sort;
-  if (args.limit) params.limit = args.limit;
+  if (args.limit !== undefined) params.limit = args.limit;
   if (args.cursor) params.cursor = args.cursor;
-  if (!params.limit) params.limit = 25;
+  if (params.limit === undefined) params.limit = 25;
 
   console.error(`Searching issues in org ${ORG_SLUG} with query: ${args.query || '(none)'}`);
   const response = await sentryClient.searchIssues(ORG_SLUG, params);
 
-  const { data, truncated, pagination_info } = truncateResponse(response);
-  let resultText = JSON.stringify(data, null, 2);
-  if (truncated && pagination_info) {
-    resultText = `${pagination_info}\n\n${resultText}`;
-  }
-
-  return { content: [{ type: 'text', text: resultText }] };
+  return truncatedTextResult(response);
 }
 
 export async function handleUpdateIssueStatus(args: unknown): Promise<ToolResult> {
@@ -352,16 +393,19 @@ export async function handleGetIssueHashes(args: unknown): Promise<ToolResult> {
   console.error(`Getting hashes for issue ${args.issue_id}`);
   const response = await sentryClient.getIssueHashes(args.issue_id, params);
 
-  return {
-    content: [{
-      type: 'text',
-      text: JSON.stringify({
-        issue_id: args.issue_id,
-        hashes: response,
-        explanation: 'Hashes represent fingerprints used to group events. Events with matching hashes are grouped into the same issue.',
-      }, null, 2),
-    }],
-  };
+  const rawHashes: unknown[] = Array.isArray(response) ? response : [];
+  const hashes = rawHashes.slice(0, 25).map(extractEssentialHash);
+
+  return truncatedTextResult({
+    issue_id: args.issue_id,
+    total_hashes: rawHashes.length,
+    returned_hashes: hashes.length,
+    hashes,
+    explanation: 'Hashes represent fingerprints used to group events. Events with matching hashes are grouped into the same issue.',
+    _note: hashes.length < rawHashes.length
+      ? `Showing ${hashes.length} of ${rawHashes.length} hashes. Use cursor to paginate.`
+      : undefined,
+  });
 }
 
 export async function handleBulkUpdateIssues(args: unknown): Promise<ToolResult> {
@@ -385,7 +429,7 @@ export async function handleBulkUpdateIssues(args: unknown): Promise<ToolResult>
 // ============================================================
 
 export function handleToolError(error: unknown, toolName: string): ToolResult {
-  console.error(`Error calling tool ${toolName}:`, error);
+  console.error(`Error calling tool ${toolName}: ${errorMessage(error)}`);
 
   if (error instanceof McpError) {
     throw error;

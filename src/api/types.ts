@@ -27,6 +27,17 @@ export interface SentryIssue {
   [key: string]: unknown;
 }
 
+/**
+ * Entry of `GET /issues/{id}/hashes/`.
+ * Sentry's hash serializer returns objects (id + embedded latest event),
+ * not bare hash strings.
+ */
+export interface SentryIssueHash {
+  id: string;
+  latestEvent?: SentryEvent;
+  [key: string]: unknown;
+}
+
 export interface SentryEvent {
   id: string;
   eventID?: string;

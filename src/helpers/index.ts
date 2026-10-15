@@ -1,6 +1,41 @@
 // Type guards for tool argument validation
 
 // ============================================================
+// Shared Validators
+// ============================================================
+
+// Sentry issue/group IDs are numeric; slugs and opaque IDs must never carry path separators
+const NUMERIC_ID_PATTERN = /^\d+$/;
+// Dots are legal in slugs but `.` / `..` are path segments: encodeURIComponent leaves
+// them intact and the URL parser then normalizes them away, dropping the org segment.
+const SLUG_PATTERN = /^(?!\.+$)[a-z0-9._-]+$/i;
+const ID_TOKEN_PATTERN = /^[a-zA-Z0-9_-]+$/;
+
+// Allowlists mirroring the enums declared in each tool's inputSchema
+const ISSUE_STATUSES = ['resolved', 'ignored', 'unresolved'];
+const ISSUE_SORTS = ['date', 'priority', 'freq', 'user'];
+const RELEASE_SORTS = ['date', 'semver'];
+const RELEASE_DATE_FILTERS = ['adopted', 'unadopted'];
+const EVENT_ENTRY_TYPES = ['exception', 'message', 'breadcrumbs', 'request', 'threads', 'debugmeta', 'contexts'];
+
+const UNBOUNDED = Number.MAX_SAFE_INTEGER;
+
+const isObject = (args: unknown): args is Record<string, unknown> =>
+  typeof args === 'object' && args !== null;
+
+const isString = (value: unknown): boolean => typeof value === 'string';
+const isBoolean = (value: unknown): boolean => typeof value === 'boolean';
+const isNumericId = (value: unknown): boolean => typeof value === 'string' && NUMERIC_ID_PATTERN.test(value);
+const isSlug = (value: unknown): boolean => typeof value === 'string' && SLUG_PATTERN.test(value);
+const isIdToken = (value: unknown): boolean => typeof value === 'string' && ID_TOKEN_PATTERN.test(value);
+const isStringArray = (value: unknown): boolean => Array.isArray(value) && value.every(item => typeof item === 'string');
+const isEnum = (value: unknown, allowed: string[]): boolean => typeof value === 'string' && allowed.includes(value);
+const isNumberInRange = (value: unknown, min: number, max: number): boolean =>
+  typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+const isOptional = (value: unknown, check: (value: unknown) => boolean): boolean =>
+  value === undefined || check(value);
+
+// ============================================================
 // Issue Tool Type Guards
 // ============================================================
 
@@ -12,13 +47,14 @@ export const isValidGetIssueArgs = (args: unknown): args is {
   grep_pattern?: string;
   max_stack_frames?: number;
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).issue_id_or_url === 'string' &&
-  ((args as Record<string, unknown>).include_latest_event === undefined || typeof (args as Record<string, unknown>).include_latest_event === 'boolean') &&
-  ((args as Record<string, unknown>).include_fields === undefined || Array.isArray((args as Record<string, unknown>).include_fields)) &&
-  ((args as Record<string, unknown>).exclude_fields === undefined || Array.isArray((args as Record<string, unknown>).exclude_fields)) &&
-  ((args as Record<string, unknown>).grep_pattern === undefined || typeof (args as Record<string, unknown>).grep_pattern === 'string') &&
-  ((args as Record<string, unknown>).max_stack_frames === undefined || typeof (args as Record<string, unknown>).max_stack_frames === 'number');
+  isObject(args) &&
+  // Accepts a numeric ID or a full issue URL; the handler extracts and re-validates the ID
+  isString(args.issue_id_or_url) &&
+  isOptional(args.include_latest_event, isBoolean) &&
+  isOptional(args.include_fields, isStringArray) &&
+  isOptional(args.exclude_fields, isStringArray) &&
+  isOptional(args.grep_pattern, isString) &&
+  isOptional(args.max_stack_frames, value => isNumberInRange(value, 0, UNBOUNDED));
 
 export const isValidListIssuesArgs = (args: unknown): args is {
   project_slug: string;
@@ -27,12 +63,12 @@ export const isValidListIssuesArgs = (args: unknown): args is {
   limit?: number;
   cursor?: string;
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).project_slug === 'string' &&
-  ((args as Record<string, unknown>).query === undefined || typeof (args as Record<string, unknown>).query === 'string') &&
-  ((args as Record<string, unknown>).status === undefined || typeof (args as Record<string, unknown>).status === 'string') &&
-  ((args as Record<string, unknown>).limit === undefined || ((typeof (args as Record<string, unknown>).limit === 'number') && ((args as Record<string, unknown>).limit as number) > 0 && ((args as Record<string, unknown>).limit as number) <= 100)) &&
-  ((args as Record<string, unknown>).cursor === undefined || typeof (args as Record<string, unknown>).cursor === 'string');
+  isObject(args) &&
+  isSlug(args.project_slug) &&
+  isOptional(args.query, isString) &&
+  isOptional(args.status, value => isEnum(value, ISSUE_STATUSES)) &&
+  isOptional(args.limit, value => isNumberInRange(value, 1, 100)) &&
+  isOptional(args.cursor, isString);
 
 export const isValidSearchIssuesArgs = (args: unknown): args is {
   query?: string;
@@ -40,36 +76,35 @@ export const isValidSearchIssuesArgs = (args: unknown): args is {
   limit?: number;
   cursor?: string;
 } =>
-  typeof args === 'object' && args !== null &&
-  ((args as Record<string, unknown>).query === undefined || typeof (args as Record<string, unknown>).query === 'string') &&
-  ((args as Record<string, unknown>).sort === undefined || typeof (args as Record<string, unknown>).sort === 'string') &&
-  ((args as Record<string, unknown>).limit === undefined || ((typeof (args as Record<string, unknown>).limit === 'number') && ((args as Record<string, unknown>).limit as number) > 0 && ((args as Record<string, unknown>).limit as number) <= 100)) &&
-  ((args as Record<string, unknown>).cursor === undefined || typeof (args as Record<string, unknown>).cursor === 'string');
+  isObject(args) &&
+  isOptional(args.query, isString) &&
+  isOptional(args.sort, value => isEnum(value, ISSUE_SORTS)) &&
+  isOptional(args.limit, value => isNumberInRange(value, 1, 100)) &&
+  isOptional(args.cursor, isString);
 
 export const isValidUpdateIssueArgs = (args: unknown): args is {
   issue_id: string;
   status: 'resolved' | 'ignored' | 'unresolved';
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).issue_id === 'string' &&
-  typeof (args as Record<string, unknown>).status === 'string' &&
-  ['resolved', 'ignored', 'unresolved'].includes((args as Record<string, unknown>).status as string);
+  isObject(args) &&
+  isNumericId(args.issue_id) &&
+  isEnum(args.status, ISSUE_STATUSES);
 
 export const isValidCreateCommentArgs = (args: unknown): args is {
   issue_id: string;
   comment_text: string;
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).issue_id === 'string' &&
-  typeof (args as Record<string, unknown>).comment_text === 'string';
+  isObject(args) &&
+  isNumericId(args.issue_id) &&
+  isString(args.comment_text);
 
 export const isValidGetIssueHashesArgs = (args: unknown): args is {
   issue_id: string;
   cursor?: string;
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).issue_id === 'string' &&
-  ((args as Record<string, unknown>).cursor === undefined || typeof (args as Record<string, unknown>).cursor === 'string');
+  isObject(args) &&
+  isNumericId(args.issue_id) &&
+  isOptional(args.cursor, isString);
 
 export const isValidBulkUpdateArgs = (args: unknown): args is {
   project_slug: string;
@@ -78,12 +113,12 @@ export const isValidBulkUpdateArgs = (args: unknown): args is {
   assigned_to?: string;
   has_seen?: boolean;
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).project_slug === 'string' &&
-  ((args as Record<string, unknown>).query === undefined || typeof (args as Record<string, unknown>).query === 'string') &&
-  ((args as Record<string, unknown>).status === undefined || ['resolved', 'ignored', 'unresolved'].includes((args as Record<string, unknown>).status as string)) &&
-  ((args as Record<string, unknown>).assigned_to === undefined || typeof (args as Record<string, unknown>).assigned_to === 'string') &&
-  ((args as Record<string, unknown>).has_seen === undefined || typeof (args as Record<string, unknown>).has_seen === 'boolean');
+  isObject(args) &&
+  isSlug(args.project_slug) &&
+  isOptional(args.query, isString) &&
+  isOptional(args.status, value => isEnum(value, ISSUE_STATUSES)) &&
+  isOptional(args.assigned_to, isString) &&
+  isOptional(args.has_seen, isBoolean);
 
 // ============================================================
 // Event Tool Type Guards
@@ -96,12 +131,12 @@ export const isValidGetEventArgs = (args: unknown): args is {
   offset?: number;
   entry_type?: string;
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).project_slug === 'string' &&
-  typeof (args as Record<string, unknown>).event_id === 'string' &&
-  ((args as Record<string, unknown>).limit === undefined || (typeof (args as Record<string, unknown>).limit === 'number' && ((args as Record<string, unknown>).limit as number) > 0)) &&
-  ((args as Record<string, unknown>).offset === undefined || (typeof (args as Record<string, unknown>).offset === 'number' && ((args as Record<string, unknown>).offset as number) >= 0)) &&
-  ((args as Record<string, unknown>).entry_type === undefined || typeof (args as Record<string, unknown>).entry_type === 'string');
+  isObject(args) &&
+  isSlug(args.project_slug) &&
+  isIdToken(args.event_id) &&
+  isOptional(args.limit, value => isNumberInRange(value, 1, UNBOUNDED)) &&
+  isOptional(args.offset, value => isNumberInRange(value, 0, UNBOUNDED)) &&
+  isOptional(args.entry_type, value => isEnum(value, EVENT_ENTRY_TYPES));
 
 export const isValidListIssueEventsArgs = (args: unknown): args is {
   issue_id: string;
@@ -109,11 +144,11 @@ export const isValidListIssueEventsArgs = (args: unknown): args is {
   cursor?: string;
   full?: boolean;
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).issue_id === 'string' &&
-  ((args as Record<string, unknown>).limit === undefined || ((typeof (args as Record<string, unknown>).limit === 'number') && ((args as Record<string, unknown>).limit as number) > 0 && ((args as Record<string, unknown>).limit as number) <= 100)) &&
-  ((args as Record<string, unknown>).cursor === undefined || typeof (args as Record<string, unknown>).cursor === 'string') &&
-  ((args as Record<string, unknown>).full === undefined || typeof (args as Record<string, unknown>).full === 'boolean');
+  isObject(args) &&
+  isNumericId(args.issue_id) &&
+  isOptional(args.limit, value => isNumberInRange(value, 1, 100)) &&
+  isOptional(args.cursor, isString) &&
+  isOptional(args.full, isBoolean);
 
 export const isValidListErrorEventsArgs = (args: unknown): args is {
   project_slug: string;
@@ -122,12 +157,12 @@ export const isValidListErrorEventsArgs = (args: unknown): args is {
   query?: string;
   full?: boolean;
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).project_slug === 'string' &&
-  ((args as Record<string, unknown>).limit === undefined || ((typeof (args as Record<string, unknown>).limit === 'number') && ((args as Record<string, unknown>).limit as number) > 0 && ((args as Record<string, unknown>).limit as number) <= 100)) &&
-  ((args as Record<string, unknown>).cursor === undefined || typeof (args as Record<string, unknown>).cursor === 'string') &&
-  ((args as Record<string, unknown>).query === undefined || typeof (args as Record<string, unknown>).query === 'string') &&
-  ((args as Record<string, unknown>).full === undefined || typeof (args as Record<string, unknown>).full === 'boolean');
+  isObject(args) &&
+  isSlug(args.project_slug) &&
+  isOptional(args.limit, value => isNumberInRange(value, 1, 100)) &&
+  isOptional(args.cursor, isString) &&
+  isOptional(args.query, isString) &&
+  isOptional(args.full, isBoolean);
 
 export const isValidGetStackFramesArgs = (args: unknown): args is {
   project_slug: string;
@@ -135,19 +170,19 @@ export const isValidGetStackFramesArgs = (args: unknown): args is {
   in_app_only?: boolean;
   max_frames?: number;
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).project_slug === 'string' &&
-  typeof (args as Record<string, unknown>).event_id === 'string' &&
-  ((args as Record<string, unknown>).in_app_only === undefined || typeof (args as Record<string, unknown>).in_app_only === 'boolean') &&
-  ((args as Record<string, unknown>).max_frames === undefined || typeof (args as Record<string, unknown>).max_frames === 'number');
+  isObject(args) &&
+  isSlug(args.project_slug) &&
+  isIdToken(args.event_id) &&
+  isOptional(args.in_app_only, isBoolean) &&
+  isOptional(args.max_frames, value => isNumberInRange(value, 1, 100));
 
 export const isValidCheckDsymArgs = (args: unknown): args is {
   project_slug: string;
   event_id?: string;
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).project_slug === 'string' &&
-  ((args as Record<string, unknown>).event_id === undefined || typeof (args as Record<string, unknown>).event_id === 'string');
+  isObject(args) &&
+  isSlug(args.project_slug) &&
+  isOptional(args.event_id, isIdToken);
 
 export const isValidListBreadcrumbsArgs = (args: unknown): args is {
   project_slug: string;
@@ -155,11 +190,11 @@ export const isValidListBreadcrumbsArgs = (args: unknown): args is {
   limit?: number;
   type?: string;
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).project_slug === 'string' &&
-  typeof (args as Record<string, unknown>).event_id === 'string' &&
-  ((args as Record<string, unknown>).limit === undefined || ((typeof (args as Record<string, unknown>).limit === 'number') && ((args as Record<string, unknown>).limit as number) > 0 && ((args as Record<string, unknown>).limit as number) <= 100)) &&
-  ((args as Record<string, unknown>).type === undefined || typeof (args as Record<string, unknown>).type === 'string');
+  isObject(args) &&
+  isSlug(args.project_slug) &&
+  isIdToken(args.event_id) &&
+  isOptional(args.limit, value => isNumberInRange(value, 1, 100)) &&
+  isOptional(args.type, isString);
 
 // ============================================================
 // Release Tool Type Guards
@@ -172,20 +207,21 @@ export const isValidListReleasesArgs = (args: unknown): args is {
   cursor?: string;
   sort?: string;
 } =>
-  typeof args === 'object' && args !== null &&
-  ((args as Record<string, unknown>).query === undefined || typeof (args as Record<string, unknown>).query === 'string') &&
-  ((args as Record<string, unknown>).date === undefined || typeof (args as Record<string, unknown>).date === 'string') &&
-  ((args as Record<string, unknown>).limit === undefined || ((typeof (args as Record<string, unknown>).limit === 'number') && ((args as Record<string, unknown>).limit as number) > 0 && ((args as Record<string, unknown>).limit as number) <= 100)) &&
-  ((args as Record<string, unknown>).cursor === undefined || typeof (args as Record<string, unknown>).cursor === 'string') &&
-  ((args as Record<string, unknown>).sort === undefined || typeof (args as Record<string, unknown>).sort === 'string');
+  isObject(args) &&
+  isOptional(args.query, isString) &&
+  isOptional(args.date, value => isEnum(value, RELEASE_DATE_FILTERS)) &&
+  isOptional(args.limit, value => isNumberInRange(value, 1, 100)) &&
+  isOptional(args.cursor, isString) &&
+  isOptional(args.sort, value => isEnum(value, RELEASE_SORTS));
 
 export const isValidGetReleaseArgs = (args: unknown): args is {
   version: string;
   full?: boolean;
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).version === 'string' &&
-  ((args as Record<string, unknown>).full === undefined || typeof (args as Record<string, unknown>).full === 'boolean');
+  isObject(args) &&
+  // Versions are free-form (semver, SHA, custom); the client URL-encodes them
+  isString(args.version) &&
+  isOptional(args.full, isBoolean);
 
 // ============================================================
 // Organization Tool Type Guards
@@ -194,28 +230,29 @@ export const isValidGetReleaseArgs = (args: unknown): args is {
 export const isValidGetIssueTagsArgs = (args: unknown): args is {
   issue_id: string;
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).issue_id === 'string';
+  isObject(args) &&
+  isNumericId(args.issue_id);
 
 export const isValidGetIssueTagValuesArgs = (args: unknown): args is {
   issue_id: string;
   tag_key: string;
   limit?: number;
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).issue_id === 'string' &&
-  typeof (args as Record<string, unknown>).tag_key === 'string' &&
-  ((args as Record<string, unknown>).limit === undefined || ((typeof (args as Record<string, unknown>).limit === 'number') && ((args as Record<string, unknown>).limit as number) > 0 && ((args as Record<string, unknown>).limit as number) <= 100));
+  isObject(args) &&
+  isNumericId(args.issue_id) &&
+  // Tag keys are free-form (e.g. "user.email"); the client URL-encodes them
+  isString(args.tag_key) &&
+  isOptional(args.limit, value => isNumberInRange(value, 1, 100));
 
 export const isValidListActivityArgs = (args: unknown): args is {
   issue_id: string;
   limit?: number;
   cursor?: string;
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).issue_id === 'string' &&
-  ((args as Record<string, unknown>).limit === undefined || ((typeof (args as Record<string, unknown>).limit === 'number') && ((args as Record<string, unknown>).limit as number) > 0 && ((args as Record<string, unknown>).limit as number) <= 100)) &&
-  ((args as Record<string, unknown>).cursor === undefined || typeof (args as Record<string, unknown>).cursor === 'string');
+  isObject(args) &&
+  isNumericId(args.issue_id) &&
+  isOptional(args.limit, value => isNumberInRange(value, 1, 100)) &&
+  isOptional(args.cursor, isString);
 
 // ============================================================
 // Advanced Tool Type Guards
@@ -225,25 +262,25 @@ export const isValidGetTraceArgs = (args: unknown): args is {
   trace_id: string;
   max_spans?: number;
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).trace_id === 'string' &&
-  ((args as Record<string, unknown>).max_spans === undefined || ((typeof (args as Record<string, unknown>).max_spans === 'number') && ((args as Record<string, unknown>).max_spans as number) > 0 && ((args as Record<string, unknown>).max_spans as number) <= 500));
+  isObject(args) &&
+  isIdToken(args.trace_id) &&
+  isOptional(args.max_spans, value => isNumberInRange(value, 1, 500));
 
 export const isValidMergeIssuesArgs = (args: unknown): args is {
   issue_id: string;
   target_ids: string[];
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).issue_id === 'string' &&
-  Array.isArray((args as Record<string, unknown>).target_ids) &&
-  ((args as Record<string, unknown>).target_ids as unknown[]).every(t => typeof t === 'string') &&
-  ((args as Record<string, unknown>).target_ids as unknown[]).length <= 10;
+  isObject(args) &&
+  isNumericId(args.issue_id) &&
+  Array.isArray(args.target_ids) &&
+  args.target_ids.every(isNumericId) &&
+  args.target_ids.length <= 10;
 
 export const isValidGetGroupingConfigArgs = (args: unknown): args is {
   issue_id: string;
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).issue_id === 'string';
+  isObject(args) &&
+  isNumericId(args.issue_id);
 
 // ============================================================
 // Raw API Type Guard
@@ -256,9 +293,10 @@ export const isValidRawApiArgs = (args: unknown): args is {
   body?: unknown;
   grep_pattern?: string;
 } =>
-  typeof args === 'object' && args !== null &&
-  typeof (args as Record<string, unknown>).endpoint === 'string' &&
-  ((args as Record<string, unknown>).method === undefined || typeof (args as Record<string, unknown>).method === 'string') &&
-  ((args as Record<string, unknown>).params === undefined || typeof (args as Record<string, unknown>).params === 'object') &&
-  ((args as Record<string, unknown>).body === undefined || typeof (args as Record<string, unknown>).body === 'object') &&
-  ((args as Record<string, unknown>).grep_pattern === undefined || typeof (args as Record<string, unknown>).grep_pattern === 'string');
+  isObject(args) &&
+  // The path itself is normalized and rejected in handleRawApi
+  isString(args.endpoint) &&
+  isOptional(args.method, isString) &&
+  isOptional(args.params, value => typeof value === 'object') &&
+  isOptional(args.body, value => typeof value === 'object') &&
+  isOptional(args.grep_pattern, isString);

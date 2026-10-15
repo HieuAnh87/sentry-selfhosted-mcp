@@ -2,10 +2,11 @@
 
 import { sentryClient } from '../api/client.js';
 import { ORG_SLUG } from '../config.js';
-import { truncateResponse, truncateStackTraces } from '../helpers/truncate.js';
+import { truncateStackTraces } from '../helpers/truncate.js';
 import { filterObjectFields } from '../helpers/filter.js';
 import { extractEssentialEventEntry, extractBreadcrumbs } from '../helpers/extract.js';
 import { grepFilter } from '../helpers/grep.js';
+import { truncatedTextResult } from './issues.js';
 import type { ToolDefinition, ToolResult } from '../api/types.js';
 import type { SentryEvent } from '../api/client.js';
 import {
@@ -152,6 +153,7 @@ export async function handleGetSentryEventDetails(args: unknown): Promise<ToolRe
 
   if (eventData.entries && Array.isArray(eventData.entries)) {
     const totalEntries = eventData.entries.length;
+    const availableTypes = [...new Set(eventData.entries.map((e) => e.type))];
     let selectedEntries: SentryEvent['entries'] = [];
 
     if (args.entry_type) {
@@ -161,7 +163,7 @@ export async function handleGetSentryEventDetails(args: unknown): Promise<ToolRe
 
       if (selectedEntries.length === 0) {
         eventData.entries = [];
-        eventData.entriesError = `No entries of type '${args.entry_type}' found. Available types: ${[...new Set(eventData.entries.map((e) => e.type))].join(', ')}`;
+        eventData.entriesError = `No entries of type '${args.entry_type}' found. Available types: ${availableTypes.join(', ')}`;
       }
     } else {
       const priorityTypes = ['exception', 'message', 'breadcrumbs', 'request'];
@@ -190,7 +192,7 @@ export async function handleGetSentryEventDetails(args: unknown): Promise<ToolRe
       total_entries: totalEntries,
       showing: extractedEntries.length,
       entry_types: extractedEntries.map((e) => (e as Record<string, unknown>).type),
-      available_types: [...new Set(selectedEntries.map((e) => e.type))],
+      available_types: availableTypes,
       tip: args.entry_type
         ? `Showing only '${args.entry_type}' entries.`
         : "Showing prioritized entries. Use entry_type='exception' to see only stack traces.",
@@ -206,13 +208,7 @@ export async function handleGetSentryEventDetails(args: unknown): Promise<ToolRe
     }
   }
 
-  const { data, truncated, pagination_info } = truncateResponse(eventData);
-  let resultText = JSON.stringify(data, null, 2);
-  if (truncated && pagination_info) {
-    resultText = `${pagination_info}\n\n${resultText}`;
-  }
-
-  return { content: [{ type: 'text', text: resultText }] };
+  return truncatedTextResult(eventData);
 }
 
 export async function handleListIssueEvents(args: unknown): Promise<ToolResult> {
@@ -221,10 +217,10 @@ export async function handleListIssueEvents(args: unknown): Promise<ToolResult> 
   }
 
   const params: Record<string, string | number | boolean> = {};
-  if (args.limit) params.limit = args.limit;
+  if (args.limit !== undefined) params.limit = args.limit;
   if (args.cursor) params.cursor = args.cursor;
   if (args.full) params.full = args.full;
-  if (!params.limit) params.limit = 25;
+  if (params.limit === undefined) params.limit = 25;
 
   console.error(`Listing events for issue ${args.issue_id}`);
   const rawEvents = await sentryClient.listIssueEvents(args.issue_id, params);
@@ -242,13 +238,7 @@ export async function handleListIssueEvents(args: unknown): Promise<ToolResult> 
     }));
   }
 
-  const { data, truncated, pagination_info } = truncateResponse(eventData);
-  let resultText = JSON.stringify(data, null, 2);
-  if (truncated && pagination_info) {
-    resultText = `${pagination_info}\n\n${resultText}`;
-  }
-
-  return { content: [{ type: 'text', text: resultText }] };
+  return truncatedTextResult(eventData);
 }
 
 export async function handleListErrorEvents(args: unknown): Promise<ToolResult> {
@@ -257,11 +247,11 @@ export async function handleListErrorEvents(args: unknown): Promise<ToolResult> 
   }
 
   const params: Record<string, string | number | boolean> = {};
-  if (args.limit) params.limit = args.limit;
+  if (args.limit !== undefined) params.limit = args.limit;
   if (args.cursor) params.cursor = args.cursor;
   if (args.query) params.query = args.query;
   if (args.full) params.full = args.full;
-  if (!params.limit) params.limit = 25;
+  if (params.limit === undefined) params.limit = 25;
 
   console.error(`Listing error events for project ${args.project_slug}`);
   const rawEvents = await sentryClient.listProjectEvents(ORG_SLUG, args.project_slug, params);
@@ -281,13 +271,7 @@ export async function handleListErrorEvents(args: unknown): Promise<ToolResult> 
     }));
   }
 
-  const { data, truncated, pagination_info } = truncateResponse(eventData);
-  let resultText = JSON.stringify(data, null, 2);
-  if (truncated && pagination_info) {
-    resultText = `${pagination_info}\n\n${resultText}`;
-  }
-
-  return { content: [{ type: 'text', text: resultText }] };
+  return truncatedTextResult(eventData);
 }
 
 export async function handleGetStackFrames(args: unknown): Promise<ToolResult> {

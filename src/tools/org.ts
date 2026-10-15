@@ -2,9 +2,9 @@
 
 import { sentryClient } from '../api/client.js';
 import { ORG_SLUG } from '../config.js';
-import { truncateResponse } from '../helpers/truncate.js';
 import type { ToolDefinition, ToolResult } from '../api/types.js';
 import { isValidGetIssueTagsArgs, isValidGetIssueTagValuesArgs, isValidListActivityArgs } from '../helpers/index.js';
+import { truncatedTextResult } from './issues.js';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 
 // ============================================================
@@ -116,30 +116,31 @@ export async function handleGetIssueTagValues(args: unknown): Promise<ToolResult
     throw new McpError(ErrorCode.InvalidParams, 'Invalid args for get_issue_tag_values.');
   }
 
-  const params: Record<string, number> = {};
-  if (args.limit) params.limit = args.limit;
+  const limit = args.limit !== undefined ? args.limit : 10;
+  const params: Record<string, number> = { limit };
 
   console.error(`Fetching tag values for key "${args.tag_key}" on issue ${args.issue_id}`);
   const values = await sentryClient.getIssueTagValues(args.issue_id, args.tag_key, params);
 
   const total = values.reduce((sum, v) => sum + v.count, 0);
+  const returned = values.slice(0, limit);
 
-  return {
-    content: [{
-      type: 'text',
-      text: JSON.stringify({
-        issue_id: args.issue_id,
-        tag_key: args.tag_key,
-        total_count: total,
-        values: values.map(v => ({
-          value: v.value,
-          count: v.count,
-          percentage: total > 0 ? ((v.count / total) * 100).toFixed(1) + '%' : '0%',
-          lastSeen: v.lastSeen,
-        })),
-      }, null, 2),
-    }],
-  };
+  return truncatedTextResult({
+    issue_id: args.issue_id,
+    tag_key: args.tag_key,
+    total_count: total,
+    total_values: values.length,
+    returned_values: returned.length,
+    values: returned.map(v => ({
+      value: v.value,
+      count: v.count,
+      percentage: total > 0 ? ((v.count / total) * 100).toFixed(1) + '%' : '0%',
+      lastSeen: v.lastSeen,
+    })),
+    _note: returned.length < values.length
+      ? `Showing ${returned.length} of ${values.length} values; percentages are relative to total_count.`
+      : undefined,
+  });
 }
 
 export async function handleListActivity(args: unknown): Promise<ToolResult> {
@@ -148,17 +149,12 @@ export async function handleListActivity(args: unknown): Promise<ToolResult> {
   }
 
   const params: Record<string, string | number> = {};
-  if (args.limit) params.limit = args.limit;
+  if (args.limit !== undefined) params.limit = args.limit;
   if (args.cursor) params.cursor = args.cursor;
+  if (params.limit === undefined) params.limit = 25;
 
   console.error(`Fetching activity for issue ${args.issue_id}`);
   const activities = await sentryClient.listIssueActivity(args.issue_id, params);
 
-  const { data, truncated, pagination_info } = truncateResponse(activities);
-  let resultText = JSON.stringify(data, null, 2);
-  if (truncated && pagination_info) {
-    resultText = `${pagination_info}\n\n${resultText}`;
-  }
-
-  return { content: [{ type: 'text', text: resultText }] };
+  return truncatedTextResult(activities);
 }
