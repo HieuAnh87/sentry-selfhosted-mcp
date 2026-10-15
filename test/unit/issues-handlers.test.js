@@ -149,6 +149,7 @@ describe('get_sentry_issue', () => {
         entries: [
           { type: 'exception', data: { values: [{ type: 'Error', value: 'boom', stacktrace: { frames } }] } },
           { type: 'request', data: { url: 'https://x' } },
+          { type: 'debugmeta', data: { images: [] } },
         ],
       });
 
@@ -157,7 +158,8 @@ describe('get_sentry_issue', () => {
     const kept = result.latest_event.entries[0].data.values[0].stacktrace.frames;
     assert.strictEqual(kept.length, 8);
     assert.strictEqual(kept.at(-1).function, 'f11', 'innermost frames are kept');
-    assert.deepStrictEqual(result.latest_event.omitted_entry_types, ['request']);
+    assert.ok(result.latest_event.entries.some(e => e.type === 'request'), 'request is summarized');
+    assert.deepStrictEqual(result.latest_event.omitted_entry_types, ['debugmeta']);
   });
 
   it('defaults to 5 frames', async () => {

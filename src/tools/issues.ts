@@ -341,6 +341,9 @@ const mapAxiosError = (error: AxiosError, toolName: string): string => {
   return `Sentry API error for ${toolName}: ${error.message}. Status: ${status}. Response: ${detail ?? bodySnippet(data)}`;
 };
 
+// Entry types summarized in get_sentry_issue; threads/debugmeta stay in get_sentry_event_details
+const SUMMARY_ENTRY_TYPES = new Set(['exception', 'message', 'request', 'breadcrumbs']);
+
 /** Latest event reduced to what helps debugging; never the raw event. */
 const compactLatestEvent = (event: SentryEvent, maxFrames: number): Record<string, unknown> => {
   const base = {
@@ -356,7 +359,9 @@ const compactLatestEvent = (event: SentryEvent, maxFrames: number): Record<strin
   const entries: unknown[] = [];
   const omitted: string[] = [];
   for (const entry of event.entries) {
-    const compact = extractEssentialEventEntry(entry, { maxFrames });
+    const compact = SUMMARY_ENTRY_TYPES.has(String(entry?.type))
+      ? extractEssentialEventEntry(entry, { maxFrames })
+      : { _truncated: true };
     if (asRecord(compact)?._truncated) {
       omitted.push(String(entry?.type ?? 'unknown'));
     } else {

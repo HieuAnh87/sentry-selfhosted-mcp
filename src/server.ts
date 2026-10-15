@@ -198,7 +198,7 @@ export class SelfHostedSentryServer {
         switch (toolName) {
           // Issue tools
           case 'get_sentry_issue': return await handleGetSentryIssue(args);
-          case 'list_sentry_projects': return await handleListSentryProjects();
+          case 'list_sentry_projects': return await handleListSentryProjects(args);
           case 'list_sentry_issues': return await handleListSentryIssues(args);
           case 'list_issues': return await handleListIssues(args);
           case 'update_sentry_issue_status': return await handleUpdateIssueStatus(args);

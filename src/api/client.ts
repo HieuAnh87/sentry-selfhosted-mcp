@@ -3,7 +3,7 @@
 import axios, { AxiosError, AxiosResponse } from 'axios';
 import { BASE_URL, AUTH_TOKEN, TIMEOUT_MS, ORG_SLUG } from '../config.js';
 import { parseLinkHeader } from '../helpers/pagination.js';
-import type { SentryIssue, SentryIssueHash, SentryEvent, SentryRelease, SentryTeam, SentryTag, SentryTagValue, SentryActivity, SentryTrace, SentryGroupingConfig, SentryProject, Paged } from './types.js';
+import type { SentryIssue, SentryIssueHash, SentryEvent, SentryRelease, SentryTeam, SentryTag, SentryTagValue, SentryActivity, SentryProject, Paged } from './types.js';
 
 // Re-export types for convenience
 export type {
@@ -15,8 +15,6 @@ export type {
   SentryTag,
   SentryTagValue,
   SentryActivity,
-  SentryTrace,
-  SentryGroupingConfig,
   SentryProject,
   Paged,
 };

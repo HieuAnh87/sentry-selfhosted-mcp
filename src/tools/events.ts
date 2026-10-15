@@ -62,7 +62,7 @@ export const list_issue_events_tool: ToolDefinition = {
   inputSchema: {
     type: 'object',
     properties: {
-      issue_id: { type: 'string', description: 'The ID of the issue.' },
+      issue_id: { type: 'string', description: 'Numeric issue ID or short ID (e.g. PROJ-1A2).' },
       limit: { type: 'number', description: 'Max events (1-100, default: 25).', minimum: 1, maximum: 100 },
       cursor: { type: 'string', description: 'Pagination cursor.' },
       full: { type: 'boolean', description: 'Include full event details (default: false).', default: false },

@@ -29,7 +29,7 @@ const expectedTools = [
   {
     name: 'list_sentry_projects',
     required: [],
-    optional: [],
+    optional: ['cursor'],
   },
   {
     name: 'list_sentry_issues',
@@ -59,7 +59,7 @@ const expectedTools = [
   {
     name: 'bulk_update_issues',
     required: ['project_slug'],
-    optional: ['query', 'status', 'assigned_to', 'has_seen'],
+    optional: ['query', 'issue_ids', 'status', 'assigned_to', 'has_seen'],
   },
   // Event tools
   {

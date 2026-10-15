@@ -36,37 +36,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-Tool names and input schemas are unchanged, but several tools now return smaller or differently
-shaped output. Clients that parse these responses programmatically should check the following:
+Tool names are unchanged and input schemas only gained optional properties, but many tools now
+return smaller or differently shaped output. Clients that parse responses programmatically should
+check the following.
 
-- `list_sentry_projects` returns `{ total_projects, returned_projects, projects, _note }` instead
-  of the raw Sentry array. Each project keeps only `id`, `slug`, `name`, `platform`,
-  `dateCreated`, `firstEvent` and team slugs, and at most 100 projects are returned.
-- `get_issue_hashes` returns at most 25 hashes, each reduced to its `id` and a summary of
-  `latestEvent`, plus `total_hashes` / `returned_hashes` counts.
-- `get_issue_tag_values` defaults `limit` to 10 and reports `total_values` / `returned_values`.
-- `list_releases` defaults `limit` to 25, matching the other list tools.
+- **Pagination.** List tools that accept `cursor` now return, when another page exists, a second
+  text content block `{"next_cursor", "has_more", "hint"}`. The first block keeps its shape.
+  `list_sentry_projects` gains an optional `cursor` input.
+- **Issue IDs.** Every `issue_id` accepts a numeric ID or a short ID (e.g. `PROJ-1A2`), and
+  `get_sentry_issue` also accepts issue URLs. Issue requests use organization-scoped paths, the
+  only ones on which Sentry resolves short IDs.
+- **`bulk_update_issues`** gains an optional `issue_ids` input (1–100 numeric IDs). It now
+  requires either a non-empty `query` or `issue_ids` (not both) and at least one change, and
+  returns `{ updated, selection, requested, applied }` instead of Sentry's raw response.
+- **`merge_issues`** resolves short IDs, refuses issues from different projects, and reports
+  Sentry's chosen `parent` and `children`. Sentry keeps the issue first seen earliest, which may
+  not be `issue_id`.
+- **`get_grouping_config`** now explains the grouping of the issue's latest event: the grouping
+  config, and per variant its type, hash, whether it contributes, hint and contributing
+  components.
+- **`get_trace_details`** returns one flat, tree-ordered list of spans/transactions (capped by
+  `max_spans`) with totals, projects, overall duration and linked errors, searching the last 90
+  days.
+- `list_sentry_projects` returns `{ returned_projects, has_more, projects }` with essential fields
+  only (`id`, `slug`, `name`, `platform`, `dateCreated`, `firstEvent`, team slugs).
+- `get_issue_hashes` returns up to 25 hashes per page, each reduced to its `id` and a summary of
+  `latestEvent`.
+- `list_releases` returns `{ returned_releases, releases, _note }` with compact releases, and
+  defaults `limit` to 25. `list_teams` returns compact teams. `list_activity` returns compact
+  entries with the user's name only (no emails or avatars).
+- `get_issue_tag_values` defaults `limit` to 10, sorts by count, and computes percentages against
+  the tag's total (`total_count_source` says which total was used). `get_issue_tags` top values
+  are reduced to `{ value, count }`.
+- `list_breadcrumbs` returns the most recent N breadcrumbs, and `total_breadcrumbs` counts all of
+  them.
+- `get_sentry_event_details`: `offset` works without `entry_type`; `entry_type: 'contexts'`
+  returns the event's contexts; `request` (header allowlist, never cookies or authorization),
+  `threads` and `debugmeta` entries are summarized instead of being returned as `_truncated`.
+- `get_sentry_issue` fetches the issue and its latest event in parallel, always condenses the
+  latest event (exception, message, request and breadcrumbs entries; others are listed in
+  `omitted_entry_types`), and reports a failed latest-event fetch in `latest_event_error`.
+- `update_sentry_issue_status` and `create_sentry_issue_comment` return compact results.
 - `get_release_details` with `full: true` keeps only the most recent 24 buckets per stats series.
-- `get_grouping_config` truncates each `enhancements` rule blob to 2,000 characters.
-- `get_sentry_issue` reports a failed latest-event fetch in `latest_event_error` instead of
-  dropping it silently.
-- Every tool response now passes through the shared token-budget truncation. When a payload is
+- Error messages keep Sentry's `detail` for 401/403/404, cap response bodies at about 500
+  characters, suggest discovery tools on 404, and include `Retry-After` on 429.
+- List and detail tool responses go through the shared token-budget truncation. When a payload is
   too large to slice structurally, the response says so explicitly and returns a marked,
   non-parseable preview instead of an invalid object.
-- Argument validation now mirrors the declared schemas: enum fields are checked against their
-  allowed values, `limit` must be within range, project slugs must be slug-shaped, and `issue_id`
-  on the hash, grouping, merge, status and comment tools must be a numeric issue ID. Invalid
-  arguments are rejected with `InvalidParams` before any request is sent to Sentry.
+- Argument validation mirrors the declared schemas: enum fields are checked against their allowed
+  values, `limit` must be within range, project slugs must be slug-shaped, and issue IDs must be
+  numeric or short IDs. Invalid arguments are rejected with `InvalidParams` before any request is
+  sent to Sentry.
 
 ### Fixed
 
+- **`bulk_update_issues` could change far more issues than asked.** It sent `query` in the request
+  body, where Sentry ignores it, so every call applied to every unresolved issue in the project (up
+  to 1000) regardless of the query. The selection now goes in the URL, and a call with no
+  selection is refused.
+- **`merge_issues` never merged.** It sent `POST issues/{id}/hashes/`, which Sentry does not
+  accept. It now uses `PUT projects/{org}/{project}/issues/?id=…` with `{"merge": true}`, and
+  reports success only when Sentry confirms the merge.
+- **`get_trace_details` always failed.** `traces/{id}/` does not exist; the tool now uses
+  `organizations/{org}/trace/{id}/`, falling back to `events-trace/` on older versions.
+- **`get_grouping_config` always failed.** `issues/{id}/grouping-config/` does not exist; the tool
+  now uses the event `grouping-info/` endpoint.
+- **`list_activity` always failed.** The route is `issues/{id}/activities/`, not `activity/`.
+- **Pagination cursors were unreachable.** Tools accepted `cursor` but never returned one, because
+  the client dropped Sentry's `Link` header.
+- **`get_stack_frames` with `in_app_only: true` returned no frames.** It read `in_app`; Sentry's API
+  returns `inApp`.
+- Source context around each stack frame was always empty; it now keeps ±3 lines around the frame's
+  line.
+- `get_sentry_issue` ignored `max_stack_frames` values above 5.
+- `get_issue_tag_values` showed 100% for the top value when `limit` was 1, because percentages
+  were computed from the returned page only.
+- List endpoints that page with `per_page` (events, releases, tag values) ignored `limit`; both
+  are now sent.
 - **`list_issues` sent `POST` to the organization issues endpoint.** Searching issues is a `GET`;
   the tool now uses it.
 - **Tool handler errors could escape the server's error handling.** The dispatcher returned
   handler promises without awaiting them, so rejections bypassed the `catch` that maps Sentry
   errors to MCP errors.
-- **`merge_issues` always reported `merged: true`.** It now reports success only when Sentry
-  confirms the merge, and otherwise tells the caller to verify in Sentry.
 - `limit: 0` and other falsy values were treated as "not provided". Values are now passed through
   and validated.
 - `get_sentry_event_details` listed only the selected entry types in `available_types`; it now

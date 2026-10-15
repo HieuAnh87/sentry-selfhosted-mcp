@@ -152,36 +152,6 @@ export interface SentryActivity {
   issue?: string;
 }
 
-export interface SentryTrace {
-  traceId: string;
-  spans?: SentrySpan[];
-  duration?: number;
-  startTimestamp?: number;
-  endTimestamp?: number;
-  [key: string]: unknown;
-}
-
-export interface SentrySpan {
-  spanId: string;
-  traceId?: string;
-  parentSpanId?: string;
-  op?: string;
-  description?: string;
-  startTimestamp?: number;
-  timestamp?: number;
-  tags?: Record<string, string>;
-  status?: string;
-  data?: Record<string, unknown>;
-  exclusiveTime?: number;
-  [key: string]: unknown;
-}
-
-export interface SentryGroupingConfig {
-  id: string;
-  name: string;
-  enhancements?: string;
-}
-
 export interface SentryProject {
   id: string;
   slug: string;

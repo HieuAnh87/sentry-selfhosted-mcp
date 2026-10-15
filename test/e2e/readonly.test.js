@@ -16,7 +16,7 @@ import { McpServerProcess, StubSentry } from '../support/harness.js';
 const MUTATING_TOOLS = [
   ['update_sentry_issue_status', { issue_id: '123', status: 'resolved' }],
   ['create_sentry_issue_comment', { issue_id: '123', comment_text: 'hi' }],
-  ['bulk_update_issues', { project_slug: 'web', status: 'resolved' }],
+  ['bulk_update_issues', { project_slug: 'web', issue_ids: ['123'], status: 'resolved' }],
   ['merge_issues', { issue_id: '123', target_ids: ['456'] }],
 ];
 

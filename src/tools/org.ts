@@ -27,7 +27,7 @@ export const get_issue_tags_tool: ToolDefinition = {
   inputSchema: {
     type: 'object',
     properties: {
-      issue_id: { type: 'string', description: 'Issue ID.' },
+      issue_id: { type: 'string', description: 'Numeric issue ID or short ID (e.g. PROJ-1A2).' },
     },
     required: ['issue_id'],
   },
@@ -39,7 +39,7 @@ export const get_issue_tag_values_tool: ToolDefinition = {
   inputSchema: {
     type: 'object',
     properties: {
-      issue_id: { type: 'string', description: 'Issue ID.' },
+      issue_id: { type: 'string', description: 'Numeric issue ID or short ID (e.g. PROJ-1A2).' },
       tag_key: {
         type: 'string',
         description: 'Tag key (e.g., "environment", "release", "user.email", "os.name").',
@@ -62,7 +62,7 @@ export const list_activity_tool: ToolDefinition = {
   inputSchema: {
     type: 'object',
     properties: {
-      issue_id: { type: 'string', description: 'Issue ID.' },
+      issue_id: { type: 'string', description: 'Numeric issue ID or short ID (e.g. PROJ-1A2).' },
       limit: {
         type: 'number',
         description: 'Max activities (1-100, default: 25).',
