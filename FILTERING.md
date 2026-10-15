@@ -1,8 +1,8 @@
-# Sentry MCP Filtering Documentation
+# Filtering large Sentry responses
 
-## Overview
+The `get_sentry_issue` tool accepts five filter parameters for keeping large Sentry responses inside an agent's token budget. This page documents all of them.
 
-Version 0.2.1 adds powerful filtering capabilities to the `get_sentry_issue` tool to handle large Sentry responses that exceed token limits.
+Related: [README → Reducing response size](README.md#reducing-response-size) covers the equivalent controls on the other tools (`limit` and `entry_type` on `get_sentry_event_details`, `grep_pattern` on `raw_sentry_api`, `in_app_only` on `get_stack_frames`).
 
 ## Filtering Options
 
@@ -107,3 +107,5 @@ For issues exceeding token limits, try this progression:
 2. Add `exclude_fields` for metadata
 3. Use `include_fields` for only essential data
 4. Apply `grep_pattern` for specific error patterns
+
+If the issue is still too large, the payload is probably in the event rather than the issue. Drop `include_latest_event` and fetch the event separately with `get_sentry_event_details` (`entry_type: "exception"`, `limit: 3`), or skip straight to `get_stack_frames` with `in_app_only: true`.

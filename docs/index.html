@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>sentry-selfhosted-mcp — MCP Server for Self-Hosted Sentry</title>
-  <meta name="description" content="Give AI assistants safe, structured access to your self-hosted Sentry instance. 24 tools. Read-only by default.">
+  <title>selfhosted-sentry-mcp — MCP Server for Self-Hosted Sentry</title>
+  <meta name="description" content="Token-efficient MCP access to your self-hosted Sentry instance. 24 tools for issue triage, stack frames, breadcrumbs, dSYM checks and traces — built so LLM agents don't blow their context window.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -17,8 +17,10 @@
       --border: #e5e7eb;
       --border-light: #f3f4f6;
       --text: #111827;
-      --text-secondary: #6b7280;
-      --text-tertiary: #9ca3af;
+      /* Both secondary and tertiary meet WCAG AA (4.5:1) against --bg #fafafa:
+         #4b5563 = 7.24:1, #6b7280 = 4.63:1. Do not lighten either. */
+      --text-secondary: #4b5563;
+      --text-tertiary: #6b7280;
       --accent: #4f46e5;
       --accent-hover: #4338ca;
       --accent-light: #eef2ff;
@@ -32,7 +34,16 @@
       --max-w: 1120px;
     }
 
-    html { scroll-behavior: smooth; }
+    @media (prefers-reduced-motion: no-preference) {
+      html { scroll-behavior: smooth; }
+    }
+
+    /* Visible keyboard focus everywhere; the tab buttons below strip borders. */
+    :focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+      border-radius: 4px;
+    }
 
     body {
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -388,7 +399,7 @@
       font-weight: 700;
       flex-shrink: 0;
     }
-    .step h4 {
+    .step h3 {
       font-size: 14px;
       font-weight: 600;
       margin-bottom: 2px;
@@ -396,6 +407,14 @@
     .step p {
       font-size: 13px;
       color: var(--text-secondary);
+    }
+    .step p code {
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 12px;
+      background: var(--border-light);
+      padding: 1px 4px;
+      border-radius: 4px;
+      color: var(--text);
     }
 
     .code-block {
@@ -428,9 +447,31 @@
       color: var(--dark-text);
       border-bottom-color: var(--accent);
     }
+    /* The tab strip sits on --dark-surface, where the global accent outline is
+       low-contrast. Use a light ring instead. */
+    .code-tab:focus-visible {
+      outline: 2px solid var(--dark-text);
+      outline-offset: -3px;
+      border-radius: 4px;
+    }
     .code-panels { position: relative; }
     .code-panel { display: none; }
     .code-panel.active { display: block; }
+    .code-panel:focus-visible {
+      outline: 2px solid var(--dark-text);
+      outline-offset: -2px;
+    }
+    .code-panel-path {
+      padding: 10px 16px 0;
+      font-size: 12px;
+      color: var(--dark-text-secondary);
+      line-height: 1.5;
+    }
+    .code-panel-path code {
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+      color: var(--dark-text);
+      word-break: break-all;
+    }
     .code-content {
       padding: 16px;
       font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
@@ -503,6 +544,37 @@
       font-family: "SF Mono", "Fira Code", monospace;
     }
     .tools-col li { padding: 3px 0; }
+    .w {
+      display: inline-block;
+      font-family: 'Inter', sans-serif;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      color: #9a3412;
+      background: #ffedd5;
+      border-radius: 4px;
+      padding: 0 4px;
+      margin-left: 4px;
+      vertical-align: 1px;
+    }
+    .tools-legend {
+      text-align: center;
+      margin-top: 24px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      max-width: 640px;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.6;
+    }
+    .tools-legend code {
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 12px;
+      background: var(--border-light);
+      padding: 1px 4px;
+      border-radius: 4px;
+      color: var(--text);
+    }
 
     .tools-link {
       text-align: center;
@@ -541,6 +613,15 @@
       font-size: 13px;
       color: var(--text-secondary);
       line-height: 1.5;
+    }
+    .trust-item p code {
+      font-family: "SF Mono", "Fira Code", monospace;
+      font-size: 12px;
+      background: var(--border-light);
+      padding: 1px 4px;
+      border-radius: 4px;
+      color: var(--text);
+      word-break: break-word;
     }
 
     /* CTA */
@@ -662,7 +743,10 @@
       .cap-grid { grid-template-columns: repeat(2, 1fr); }
       .tools-grid { grid-template-columns: repeat(2, 1fr); }
       .trust-grid { grid-template-columns: 1fr; }
-      .nav-right { display: none; }
+      /* Keep the nav links reachable on small screens — only the verbose
+         "Latest release" badge is dropped, never the whole nav. */
+      .nav-right { gap: 12px; }
+      .nav-right .release-badge { display: none; }
       .hero-badges { flex-direction: column; gap: 8px; }
       footer .container { flex-direction: column; gap: 16px; text-align: center; }
       .footer-links { flex-wrap: wrap; justify-content: center; }
@@ -675,18 +759,21 @@
     <div class="container">
       <div class="nav-left">
         <div class="nav-logo">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          sentry-selfhosted-mcp
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          selfhosted-sentry-mcp
         </div>
-        <span class="version-badge">v1.1.3</span>
       </div>
       <div class="nav-right">
+        <a class="nav-link" href="https://www.npmjs.com/package/selfhosted-sentry-mcp" target="_blank" rel="noopener">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M0 7.334v8h6.666v1.332H12v-1.332h12v-8H0zm6.666 6.666H5.334v-4H4v4H1.334V8.667h5.332v5.333zm4 0v1.333H8.001V8.667h5.334v5.333h-2.669zm12.001 0h-1.33v-4h-1.336v4h-1.33v-4h-1.336v4h-2.671V8.667h8.003v5.333zM10.665 10H12v2.667h-1.335V10z"/></svg>
+          npm
+        </a>
         <a class="nav-link" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp" target="_blank" rel="noopener">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
           GitHub
         </a>
         <a class="release-badge" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp/releases" target="_blank" rel="noopener">
-          Latest release <span class="pill">v1.1.3</span>
+          Releases <span class="pill">latest</span>
         </a>
       </div>
     </div>
@@ -697,28 +784,28 @@
       <div class="hero-content">
         <div class="hero-label">MCP Server for Self-Hosted Sentry</div>
         <h1>Bring your Sentry data to AI assistants.</h1>
-        <p class="hero-desc">Query issues, events, releases, users, org stats, and project diagnostics from your self-hosted Sentry—securely. 24 tools. Read-only by default. Built for AI workflows.</p>
+        <p class="hero-desc">Triage issues, read stack frames, trace breadcrumbs and check debug symbols in your self-hosted Sentry. 24 tools, built so agents stay inside their context window: responses are filtered, truncated and capped at 50k tokens by default.</p>
         <div class="hero-actions">
           <a class="btn btn-dark" href="#quickstart">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
             Get Started in 1 Minute
           </a>
           <a class="btn btn-outline" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp" target="_blank" rel="noopener">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
             View on GitHub
           </a>
         </div>
         <div class="hero-badges">
           <span class="hero-badge">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
             Self-hosted
           </span>
           <span class="hero-badge">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
-            Read-only by default
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            Optional read-only mode
           </span>
           <span class="hero-badge">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
             24 tools
           </span>
         </div>
@@ -743,10 +830,9 @@
               <tr><td class="error">ChunkLoadError: Loading chunk 23 failed</td><td class="num">1,102</td><td class="num">76</td><td>5d ago</td></tr>
             </tbody>
           </table>
-          <div class="terminal-source">Source: sentry-selfhosted-mcp</div>
+          <div class="terminal-source">Source: selfhosted-sentry-mcp</div>
         </div>
       </div>
-    </div>
     </div>
   </header>
 
@@ -754,36 +840,36 @@
     <div class="container">
       <div class="section-header">
         <h2>The problem</h2>
-        <p>Sentry is powerful, but hard to access programmatically in AI workflows.</p>
+        <p>Sentry is powerful, but its API is hostile to an agent's context window.</p>
       </div>
       <div class="problem-grid">
         <div class="problem-item">
           <div class="problem-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
           </div>
-          <h3>No native AI integration</h3>
-          <p>Sentry UI is not designed for AI assistants or automation.</p>
+          <h3>Raw events are enormous</h3>
+          <p>A single Sentry event endpoint can return 100K+ tokens — more than most models can hold.</p>
         </div>
         <div class="problem-item">
           <div class="problem-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
           </div>
           <h3>Manual &amp; time-consuming</h3>
-          <p>Copy-paste, clicking around, exporting data—slow and error-prone.</p>
+          <p>Copy-paste, clicking around, exporting data — slow and error-prone.</p>
         </div>
         <div class="problem-item">
           <div class="problem-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
           </div>
-          <h3>Security concerns</h3>
-          <p>Sending data to third-party services is risky.</p>
+          <h3>Data stays in your network</h3>
+          <p>The server talks to your Sentry instance directly. Nothing is proxied through a third party.</p>
         </div>
         <div class="problem-item">
           <div class="problem-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
           </div>
-          <h3>Limited context</h3>
-          <p>AI lacks real-time context from issues, releases, users, and system health.</p>
+          <h3>Buried debugging signal</h3>
+          <p>Stack frames, breadcrumbs and missing dSYMs sit deep inside payloads full of noise.</p>
         </div>
       </div>
     </div>
@@ -793,50 +879,50 @@
     <div class="container">
       <div class="section-header">
         <h2>What it does</h2>
-        <p>A secure MCP server that exposes your Sentry data to AI assistants.</p>
+        <p>An MCP server that exposes your Sentry data to AI assistants, sized for their context window.</p>
       </div>
       <div class="cap-grid">
         <div class="cap-item">
           <div class="cap-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           </div>
           <h3>Issues &amp; Events</h3>
-          <p>Search, filter, and inspect issues and events.</p>
+          <p>List, search and inspect issues and events with Sentry query syntax.</p>
         </div>
         <div class="cap-item">
           <div class="cap-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
           </div>
-          <h3>Releases</h3>
-          <p>List, inspect, and compare releases.</p>
+          <h3>Stack frames</h3>
+          <p>Structured frames pulled out of the event, with an in-app-only filter.</p>
         </div>
         <div class="cap-item">
           <div class="cap-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/></svg>
           </div>
-          <h3>Users</h3>
-          <p>Lookup users and activity insights.</p>
+          <h3>Breadcrumbs</h3>
+          <p>The trail of events leading up to an error, filterable by type.</p>
         </div>
         <div class="cap-item">
           <div class="cap-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
           </div>
-          <h3>Organizations</h3>
-          <p>Org stats and usage overview.</p>
+          <h3>dSYM checks</h3>
+          <p>Spot missing iOS/macOS debug symbols and Android ProGuard mappings.</p>
         </div>
         <div class="cap-item">
           <div class="cap-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
           </div>
-          <h3>Diagnostics</h3>
-          <p>Project health and system diagnostics.</p>
+          <h3>Grouping &amp; releases</h3>
+          <p>Fingerprint hashes, grouping rules, release health and distributed traces.</p>
         </div>
         <div class="cap-item">
           <div class="cap-icon">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1010 10H12V2z"/><path d="M20.66 8A10 10 0 0014 2.05V8h6.66z"/></svg>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 2a10 10 0 1010 10H12V2z"/><path d="M20.66 8A10 10 0 0014 2.05V8h6.66z"/></svg>
           </div>
-          <h3>AI-Ready</h3>
-          <p>Structured, concise, and context-rich responses.</p>
+          <h3>Token-aware</h3>
+          <p>Field filters, grep patterns, stack truncation and a 50k-token ceiling.</p>
         </div>
       </div>
     </div>
@@ -851,93 +937,102 @@
           <div class="step">
             <div class="step-num">1</div>
             <div>
-              <h4>Get an Auth Token in Sentry</h4>
-              <p>Create a token with read access.</p>
+              <h3>Create a Sentry auth token</h3>
+              <p>Settings &rarr; Auth Tokens. Grant <code>org:read</code>, <code>project:read</code>, <code>team:read</code>, <code>event:read</code> and <code>project:releases</code>.</p>
             </div>
           </div>
           <div class="step">
             <div class="step-num">2</div>
             <div>
-              <h4>Add to your MCP client config</h4>
-              <p>Use the command below.</p>
+              <h3>Add it to your client config</h3>
+              <p>Pick your client below. Each tab shows where the file lives.</p>
             </div>
           </div>
           <div class="step">
             <div class="step-num">3</div>
             <div>
-              <h4>Start querying</h4>
-              <p>Ask questions about your Sentry data.</p>
+              <h3>Start querying</h3>
+              <p>Ask &ldquo;list unresolved issues in <em>my-project</em>&rdquo; to confirm the server loaded.</p>
             </div>
           </div>
         </div>
       </div>
       <div class="code-block">
-        <div class="code-tabs">
-          <button class="code-tab active" data-tab="claude">Claude Desktop</button>
-          <button class="code-tab" data-tab="cursor">Cursor</button>
-          <button class="code-tab" data-tab="cline">Cline</button>
-          <button class="code-tab" data-tab="windsurf">Windsurf</button>
+        <div class="code-tabs" role="tablist" aria-label="MCP client configuration examples">
+          <button class="code-tab active" role="tab" id="tab-claudecode" aria-selected="true" aria-controls="panel-claudecode" tabindex="0" data-tab="claudecode">Claude Code</button>
+          <button class="code-tab" role="tab" id="tab-cursor" aria-selected="false" aria-controls="panel-cursor" tabindex="-1" data-tab="cursor">Cursor</button>
+          <button class="code-tab" role="tab" id="tab-claudedesktop" aria-selected="false" aria-controls="panel-claudedesktop" tabindex="-1" data-tab="claudedesktop">Claude Desktop</button>
+          <button class="code-tab" role="tab" id="tab-windsurf" aria-selected="false" aria-controls="panel-windsurf" tabindex="-1" data-tab="windsurf">Windsurf</button>
         </div>
         <div class="code-header">
-          <a class="docs-link" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp" target="_blank">See full docs on GitHub →</a>
+          <a class="docs-link" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp#configuration" target="_blank" rel="noopener">See full docs on GitHub →</a>
           <button class="copy-btn" onclick="copyCode(this)">Copy</button>
         </div>
         <div class="code-panels">
-          <div class="code-panel active" data-panel="claude">
+          <div class="code-panel active" role="tabpanel" id="panel-claudecode" aria-labelledby="tab-claudecode" tabindex="0" data-panel="claudecode">
+            <p class="code-panel-path">Project scope &rarr; <code>.mcp.json</code> in your repo root &mdash; gitignore it, it holds a token. User scope &rarr; <code>claude mcp add --scope user</code>, which keeps it out of the repo entirely.</p>
             <pre class="code-content">{
   <span class="key">"mcpServers"</span>: {
     <span class="key">"sentry"</span>: {
+      <span class="key">"type"</span>: <span class="string">"stdio"</span>,
       <span class="key">"command"</span>: <span class="string">"npx"</span>,
-      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"sentry-selfhosted-mcp"</span>],
+      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"selfhosted-sentry-mcp"</span>],
       <span class="key">"env"</span>: {
         <span class="key">"SENTRY_URL"</span>: <span class="string">"https://sentry.yourcompany.com"</span>,
-        <span class="key">"SENTRY_AUTH_TOKEN"</span>: <span class="string">"sntrys_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"</span>,
-        <span class="key">"SENTRY_ORG_SLUG"</span>: <span class="string">"your-org"</span>
+        <span class="key">"SENTRY_AUTH_TOKEN"</span>: <span class="string">"&lt;your-token&gt;"</span>,
+        <span class="key">"SENTRY_ORG_SLUG"</span>: <span class="string">"your-org"</span>,
+        <span class="key">"SENTRY_READ_ONLY"</span>: <span class="string">"true"</span>
       }
     }
   }
 }</pre>
           </div>
-          <div class="code-panel" data-panel="cursor">
+          <div class="code-panel" role="tabpanel" id="panel-cursor" aria-labelledby="tab-cursor" tabindex="0" data-panel="cursor">
+            <p class="code-panel-path">Project scope &rarr; <code>.cursor/mcp.json</code>. Global &rarr; <code>~/.cursor/mcp.json</code>.</p>
             <pre class="code-content">{
   <span class="key">"mcpServers"</span>: {
     <span class="key">"sentry"</span>: {
       <span class="key">"command"</span>: <span class="string">"npx"</span>,
-      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"sentry-selfhosted-mcp"</span>],
+      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"selfhosted-sentry-mcp"</span>],
       <span class="key">"env"</span>: {
         <span class="key">"SENTRY_URL"</span>: <span class="string">"https://sentry.yourcompany.com"</span>,
-        <span class="key">"SENTRY_AUTH_TOKEN"</span>: <span class="string">"sntrys_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"</span>,
-        <span class="key">"SENTRY_ORG_SLUG"</span>: <span class="string">"your-org"</span>
+        <span class="key">"SENTRY_AUTH_TOKEN"</span>: <span class="string">"&lt;your-token&gt;"</span>,
+        <span class="key">"SENTRY_ORG_SLUG"</span>: <span class="string">"your-org"</span>,
+        <span class="key">"SENTRY_READ_ONLY"</span>: <span class="string">"true"</span>
       }
     }
   }
 }</pre>
           </div>
-          <div class="code-panel" data-panel="cline">
+          <div class="code-panel" role="tabpanel" id="panel-claudedesktop" aria-labelledby="tab-claudedesktop" tabindex="0" data-panel="claudedesktop">
+            <p class="code-panel-path">macOS &rarr; <code>~/Library/Application Support/Claude/claude_desktop_config.json</code>. Windows &rarr; <code>%APPDATA%\Claude\claude_desktop_config.json</code>. Restart the app after editing.</p>
             <pre class="code-content">{
   <span class="key">"mcpServers"</span>: {
     <span class="key">"sentry"</span>: {
       <span class="key">"command"</span>: <span class="string">"npx"</span>,
-      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"sentry-selfhosted-mcp"</span>],
+      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"selfhosted-sentry-mcp"</span>],
       <span class="key">"env"</span>: {
         <span class="key">"SENTRY_URL"</span>: <span class="string">"https://sentry.yourcompany.com"</span>,
-        <span class="key">"SENTRY_AUTH_TOKEN"</span>: <span class="string">"sntrys_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"</span>,
-        <span class="key">"SENTRY_ORG_SLUG"</span>: <span class="string">"your-org"</span>
+        <span class="key">"SENTRY_AUTH_TOKEN"</span>: <span class="string">"&lt;your-token&gt;"</span>,
+        <span class="key">"SENTRY_ORG_SLUG"</span>: <span class="string">"your-org"</span>,
+        <span class="key">"SENTRY_READ_ONLY"</span>: <span class="string">"true"</span>
       }
     }
   }
 }</pre>
           </div>
-          <div class="code-panel" data-panel="windsurf">
+          <div class="code-panel" role="tabpanel" id="panel-windsurf" aria-labelledby="tab-windsurf" tabindex="0" data-panel="windsurf">
+            <p class="code-panel-path">Windsurf &rarr; <code>~/.codeium/windsurf/mcp_config.json</code>. Check your Windsurf version's docs if that path has moved.</p>
             <pre class="code-content">{
   <span class="key">"mcpServers"</span>: {
     <span class="key">"sentry"</span>: {
       <span class="key">"command"</span>: <span class="string">"npx"</span>,
-      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"sentry-selfhosted-mcp"</span>],
+      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"selfhosted-sentry-mcp"</span>],
       <span class="key">"env"</span>: {
         <span class="key">"SENTRY_URL"</span>: <span class="string">"https://sentry.yourcompany.com"</span>,
-        <span class="key">"SENTRY_AUTH_TOKEN"</span>: <span class="string">"sntrys_xxxxxxxxxxxxxxxxxxxxxxxxxxxx"</span>,
-        <span class="key">"SENTRY_ORG_SLUG"</span>: <span class="string">"your-org"</span>
+        <span class="key">"SENTRY_AUTH_TOKEN"</span>: <span class="string">"&lt;your-token&gt;"</span>,
+        <span class="key">"SENTRY_ORG_SLUG"</span>: <span class="string">"your-org"</span>,
+        <span class="key">"SENTRY_READ_ONLY"</span>: <span class="string">"true"</span>
       }
     }
   }
@@ -945,8 +1040,8 @@
           </div>
         </div>
         <div class="code-footer">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-          Keep your token safe. Read-only access recommended.
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+          The npm package is <strong>selfhosted-sentry-mcp</strong>. This file holds a live Sentry token — keep it out of version control.
         </div>
       </div>
     </div>
@@ -960,79 +1055,84 @@
       <div class="tools-grid">
         <div class="tools-col">
           <h3>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            Issues <span class="count">(7)</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Issues <span class="count">(8)</span>
           </h3>
           <ul>
-            <li>search_issues</li>
-            <li>get_issue</li>
-            <li>get_issue_events</li>
-            <li>get_issue_tags</li>
-            <li>get_top_issues</li>
-            <li>get_issue_users</li>
-            <li>get_issue_trends</li>
+            <li>get_sentry_issue</li>
+            <li>list_sentry_projects</li>
+            <li>list_sentry_issues</li>
+            <li>list_issues</li>
+            <li>get_issue_hashes</li>
+            <li>update_sentry_issue_status<span class="w">WRITE</span></li>
+            <li>create_sentry_issue_comment<span class="w">WRITE</span></li>
+            <li>bulk_update_issues<span class="w">WRITE</span></li>
           </ul>
         </div>
         <div class="tools-col">
           <h3>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
             Events <span class="count">(6)</span>
           </h3>
           <ul>
-            <li>search_events</li>
-            <li>get_event</li>
-            <li>get_event_contexts</li>
-            <li>get_event_tags</li>
-            <li>get_top_events</li>
-            <li>get_event_trends</li>
+            <li>get_sentry_event_details</li>
+            <li>list_issue_events</li>
+            <li>list_error_events</li>
+            <li>get_stack_frames</li>
+            <li>check_dsym_status</li>
+            <li>list_breadcrumbs</li>
           </ul>
         </div>
         <div class="tools-col">
           <h3>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-            Releases <span class="count">(4)</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+            Releases <span class="count">(2)</span>
           </h3>
           <ul>
             <li>list_releases</li>
-            <li>get_release</li>
-            <li>compare_releases</li>
-            <li>get_release_issues</li>
+            <li>get_release_details</li>
           </ul>
         </div>
         <div class="tools-col">
           <h3>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-            Users <span class="count">(2)</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+            Organization <span class="count">(4)</span>
           </h3>
           <ul>
-            <li>search_users</li>
-            <li>get_user</li>
+            <li>list_teams</li>
+            <li>get_issue_tags</li>
+            <li>get_issue_tag_values</li>
+            <li>list_activity</li>
           </ul>
         </div>
         <div class="tools-col">
           <h3>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
-            Organizations <span class="count">(2)</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6"/><path d="M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24"/><path d="M1 12h6m6 0h6"/></svg>
+            Advanced <span class="count">(3)</span>
           </h3>
           <ul>
-            <li>get_organization</li>
-            <li>get_organization_stats</li>
+            <li>get_trace_details</li>
+            <li>get_grouping_config</li>
+            <li>merge_issues<span class="w">WRITE</span></li>
           </ul>
         </div>
         <div class="tools-col">
           <h3>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-            Diagnostics <span class="count">(3)</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            Raw API <span class="count">(1)</span>
           </h3>
           <ul>
-            <li>get_project_health</li>
-            <li>get_project_stats</li>
-            <li>ping</li>
+            <li>raw_sentry_api<span class="w">WRITE</span></li>
           </ul>
         </div>
       </div>
+      <p class="tools-legend">
+        <span class="w">WRITE</span> marks tools that can modify Sentry. <code>raw_sentry_api</code> accepts GET, POST, PUT and DELETE,
+        so it can reach any endpoint your token permits. <code>SENTRY_READ_ONLY=true</code> refuses the four mutating tools
+        and restricts <code>raw_sentry_api</code> to GET — it is opt-in, and off by default.
+      </p>
       <div class="tools-link">
-        <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp" target="_blank">See all tools and schemas on GitHub →</a>
+        <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp#tools" target="_blank" rel="noopener">See all tools and schemas on GitHub →</a>
       </div>
     </div>
   </section>
@@ -1046,31 +1146,31 @@
       <div class="trust-grid">
         <div class="trust-item">
           <div class="trust-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
           </div>
           <h3>Self-hosted</h3>
           <p>Runs against your Sentry instance. No data leaves your network.</p>
         </div>
         <div class="trust-item">
           <div class="trust-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
           </div>
           <h3>Token-based auth</h3>
-          <p>Uses your Sentry Auth Token. No password. No storage.</p>
+          <p>Uses your Sentry auth token, read from the environment. No password, no storage.</p>
         </div>
         <div class="trust-item">
           <div class="trust-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
           </div>
-          <h3>Read-only by default</h3>
-          <p>All tools are read-only. Safe for production.</p>
+          <h3>Read-only mode</h3>
+          <p>Five tools can write to Sentry. <code>SENTRY_READ_ONLY=true</code> blocks them; it is opt-in, not the default.</p>
         </div>
         <div class="trust-item">
           <div class="trust-icon">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
           </div>
           <h3>Open source</h3>
-          <p>Transparent and auditable. Built with security in mind.</p>
+          <p>MIT licensed and auditable. See <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp/blob/main/SECURITY.md" target="_blank" rel="noopener">SECURITY.md</a> for token scoping guidance.</p>
         </div>
       </div>
     </div>
@@ -1080,19 +1180,19 @@
     <div class="container">
       <div class="cta-left">
         <h2>Supercharge your Sentry workflow with AI.</h2>
-        <p>Join developers using sentry-selfhosted-mcp to ship faster.</p>
+        <p>Install <strong>selfhosted-sentry-mcp</strong> from npm and point it at your Sentry instance.</p>
       </div>
       <div class="cta-right">
         <div class="cta-card">
-          <a class="btn btn-dark" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp" target="_blank">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+          <a class="btn btn-dark" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp" target="_blank" rel="noopener">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
             View on GitHub
           </a>
-          <div class="repo-name">HieuAnh87/sentry-selfhosted-mcp</div>
+          <div class="repo-name">Repo: HieuAnh87/sentry-selfhosted-mcp</div>
         </div>
         <div class="cta-card cta-card-light">
-          <div class="release-label">Latest release <span class="pill">v1.1.3</span></div>
-          <a class="all-releases" href="https://github.com/HieuAnh87/sentry-selfhosted-mcp/releases" target="_blank">See all releases →</a>
+          <div class="release-label">npm <span class="pill">selfhosted-sentry-mcp</span></div>
+          <a class="all-releases" href="https://www.npmjs.com/package/selfhosted-sentry-mcp" target="_blank" rel="noopener">View on npm →</a>
         </div>
       </div>
     </div>
@@ -1101,32 +1201,59 @@
   <footer>
     <div class="container">
       <div class="footer-left">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        sentry-selfhosted-mcp
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        selfhosted-sentry-mcp
       </div>
       <div class="footer-links">
-        <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp" target="_blank">Documentation</a>
-        <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp/releases" target="_blank">Changelog</a>
-        <a href="#">Security</a>
-        <a href="#">Contributing</a>
-        <a href="#">License (MIT)</a>
+        <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp#readme" target="_blank" rel="noopener">Documentation</a>
+        <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Changelog</a>
+        <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp/blob/main/SECURITY.md" target="_blank" rel="noopener">Security</a>
+        <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener">Contributing</a>
+        <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp/blob/main/LICENSE" target="_blank" rel="noopener">License (MIT)</a>
+        <a href="https://www.npmjs.com/package/selfhosted-sentry-mcp" target="_blank" rel="noopener">npm</a>
       </div>
       <div class="footer-right">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+        <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp" target="_blank" rel="noopener" aria-label="selfhosted-sentry-mcp on GitHub">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.009-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.203 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.743 0 .267.18.578.688.48C19.138 20.163 22 16.418 22 12c0-5.523-4.477-10-10-10z"/></svg>
+        </a>
       </div>
     </div>
   </footer>
 
   <script>
-    // Tab switching
-    document.querySelectorAll('.code-tab').forEach(function(tab) {
-      tab.addEventListener('click', function() {
-        var target = this.getAttribute('data-tab');
-        var block = this.closest('.code-block');
-        block.querySelectorAll('.code-tab').forEach(function(t) { t.classList.remove('active'); });
-        block.querySelectorAll('.code-panel').forEach(function(p) { p.classList.remove('active'); });
-        this.classList.add('active');
-        block.querySelector('.code-panel[data-panel="' + target + '"]').classList.add('active');
+    // WAI-ARIA tabs pattern: roving tabindex + arrow/Home/End keys.
+    document.querySelectorAll('[role="tablist"]').forEach(function (tablist) {
+      var tabs = Array.prototype.slice.call(tablist.querySelectorAll('[role="tab"]'));
+      var block = tablist.closest('.code-block');
+
+      function select(tab, moveFocus) {
+        tabs.forEach(function (t) {
+          var isTarget = t === tab;
+          t.classList.toggle('active', isTarget);
+          t.setAttribute('aria-selected', isTarget ? 'true' : 'false');
+          // Only the selected tab stays in the page tab order.
+          t.setAttribute('tabindex', isTarget ? '0' : '-1');
+          var panel = block.querySelector('#' + t.getAttribute('aria-controls'));
+          if (panel) panel.classList.toggle('active', isTarget);
+        });
+        if (moveFocus) tab.focus();
+      }
+
+      tabs.forEach(function (tab, index) {
+        tab.addEventListener('click', function () { select(tab, false); });
+
+        tab.addEventListener('keydown', function (event) {
+          var next = null;
+          switch (event.key) {
+            case 'ArrowRight': next = tabs[(index + 1) % tabs.length]; break;
+            case 'ArrowLeft':  next = tabs[(index - 1 + tabs.length) % tabs.length]; break;
+            case 'Home':       next = tabs[0]; break;
+            case 'End':        next = tabs[tabs.length - 1]; break;
+            default: return;
+          }
+          event.preventDefault();
+          select(next, true);
+        });
       });
     });
 
@@ -1135,11 +1262,24 @@
       var block = btn.closest('.code-block');
       var activePanel = block.querySelector('.code-panel.active');
       var text = activePanel.querySelector('.code-content').textContent;
-      navigator.clipboard.writeText(text).then(function() {
-        var original = btn.textContent;
-        btn.textContent = 'Copied!';
-        setTimeout(function() { btn.textContent = original; }, 2000);
-      });
+      var original = btn.dataset.label || btn.textContent;
+      btn.dataset.label = original;
+
+      function flash(message) {
+        btn.textContent = message;
+        setTimeout(function () { btn.textContent = original; }, 2000);
+      }
+
+      if (!navigator.clipboard) {
+        flash('Copy failed');
+        return;
+      }
+
+      navigator.clipboard.writeText(text).then(
+        function () { flash('Copied!'); },
+        // Clipboard writes reject on insecure origins or denied permission.
+        function () { flash('Copy failed'); }
+      );
     }
   </script>
 
