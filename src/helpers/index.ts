@@ -6,6 +6,10 @@
 
 // Sentry issue/group IDs are numeric; slugs and opaque IDs must never carry path separators
 const NUMERIC_ID_PATTERN = /^\d+$/;
+// Short IDs are `<PROJECT-SLUG>-<base32>` (e.g. `WEB-1A3`, `my-project-2B`). Project slugs are
+// `[a-z0-9_-]`, so no dots, slashes, percent escapes or whitespace can appear.
+const SHORT_ID_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9_-]*[A-Za-z0-9_])?-[A-Za-z0-9]+$/;
+const MAX_ISSUE_ID_LENGTH = 128;
 // Dots are legal in slugs but `.` / `..` are path segments: encodeURIComponent leaves
 // them intact and the URL parser then normalizes them away, dropping the org segment.
 const SLUG_PATTERN = /^(?!\.+$)[a-z0-9._-]+$/i;
@@ -19,6 +23,7 @@ const RELEASE_DATE_FILTERS = ['adopted', 'unadopted'];
 const EVENT_ENTRY_TYPES = ['exception', 'message', 'breadcrumbs', 'request', 'threads', 'debugmeta', 'contexts'];
 
 const UNBOUNDED = Number.MAX_SAFE_INTEGER;
+const MAX_BULK_ISSUE_IDS = 100;
 
 const isObject = (args: unknown): args is Record<string, unknown> =>
   typeof args === 'object' && args !== null;
@@ -26,6 +31,12 @@ const isObject = (args: unknown): args is Record<string, unknown> =>
 const isString = (value: unknown): boolean => typeof value === 'string';
 const isBoolean = (value: unknown): boolean => typeof value === 'boolean';
 const isNumericId = (value: unknown): boolean => typeof value === 'string' && NUMERIC_ID_PATTERN.test(value);
+
+/** A numeric issue ID or a short ID such as `PROJ-1A2`. Never contains path structure. */
+export const isIssueId = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  value.length <= MAX_ISSUE_ID_LENGTH &&
+  (NUMERIC_ID_PATTERN.test(value) || SHORT_ID_PATTERN.test(value));
 const isSlug = (value: unknown): boolean => typeof value === 'string' && SLUG_PATTERN.test(value);
 const isIdToken = (value: unknown): boolean => typeof value === 'string' && ID_TOKEN_PATTERN.test(value);
 const isStringArray = (value: unknown): boolean => Array.isArray(value) && value.every(item => typeof item === 'string');
@@ -38,6 +49,12 @@ const isOptional = (value: unknown, check: (value: unknown) => boolean): boolean
 // ============================================================
 // Issue Tool Type Guards
 // ============================================================
+
+export const isValidListProjectsArgs = (args: unknown): args is {
+  cursor?: string;
+} =>
+  isObject(args) &&
+  isOptional(args.cursor, isString);
 
 export const isValidGetIssueArgs = (args: unknown): args is {
   issue_id_or_url: string;
@@ -87,7 +104,7 @@ export const isValidUpdateIssueArgs = (args: unknown): args is {
   status: 'resolved' | 'ignored' | 'unresolved';
 } =>
   isObject(args) &&
-  isNumericId(args.issue_id) &&
+  isIssueId(args.issue_id) &&
   isEnum(args.status, ISSUE_STATUSES);
 
 export const isValidCreateCommentArgs = (args: unknown): args is {
@@ -95,7 +112,7 @@ export const isValidCreateCommentArgs = (args: unknown): args is {
   comment_text: string;
 } =>
   isObject(args) &&
-  isNumericId(args.issue_id) &&
+  isIssueId(args.issue_id) &&
   isString(args.comment_text);
 
 export const isValidGetIssueHashesArgs = (args: unknown): args is {
@@ -103,12 +120,13 @@ export const isValidGetIssueHashesArgs = (args: unknown): args is {
   cursor?: string;
 } =>
   isObject(args) &&
-  isNumericId(args.issue_id) &&
+  isIssueId(args.issue_id) &&
   isOptional(args.cursor, isString);
 
 export const isValidBulkUpdateArgs = (args: unknown): args is {
   project_slug: string;
   query?: string;
+  issue_ids?: string[];
   status?: 'resolved' | 'ignored' | 'unresolved';
   assigned_to?: string;
   has_seen?: boolean;
@@ -116,6 +134,9 @@ export const isValidBulkUpdateArgs = (args: unknown): args is {
   isObject(args) &&
   isSlug(args.project_slug) &&
   isOptional(args.query, isString) &&
+  // Numeric only: the bulk endpoint filters `id=` against numeric group IDs and does not resolve short IDs
+  isOptional(args.issue_ids, value =>
+    Array.isArray(value) && value.length >= 1 && value.length <= MAX_BULK_ISSUE_IDS && value.every(isNumericId)) &&
   isOptional(args.status, value => isEnum(value, ISSUE_STATUSES)) &&
   isOptional(args.assigned_to, isString) &&
   isOptional(args.has_seen, isBoolean);
@@ -145,7 +166,7 @@ export const isValidListIssueEventsArgs = (args: unknown): args is {
   full?: boolean;
 } =>
   isObject(args) &&
-  isNumericId(args.issue_id) &&
+  isIssueId(args.issue_id) &&
   isOptional(args.limit, value => isNumberInRange(value, 1, 100)) &&
   isOptional(args.cursor, isString) &&
   isOptional(args.full, isBoolean);
@@ -231,7 +252,7 @@ export const isValidGetIssueTagsArgs = (args: unknown): args is {
   issue_id: string;
 } =>
   isObject(args) &&
-  isNumericId(args.issue_id);
+  isIssueId(args.issue_id);
 
 export const isValidGetIssueTagValuesArgs = (args: unknown): args is {
   issue_id: string;
@@ -239,7 +260,7 @@ export const isValidGetIssueTagValuesArgs = (args: unknown): args is {
   limit?: number;
 } =>
   isObject(args) &&
-  isNumericId(args.issue_id) &&
+  isIssueId(args.issue_id) &&
   // Tag keys are free-form (e.g. "user.email"); the client URL-encodes them
   isString(args.tag_key) &&
   isOptional(args.limit, value => isNumberInRange(value, 1, 100));
@@ -250,7 +271,7 @@ export const isValidListActivityArgs = (args: unknown): args is {
   cursor?: string;
 } =>
   isObject(args) &&
-  isNumericId(args.issue_id) &&
+  isIssueId(args.issue_id) &&
   isOptional(args.limit, value => isNumberInRange(value, 1, 100)) &&
   isOptional(args.cursor, isString);
 
@@ -271,16 +292,16 @@ export const isValidMergeIssuesArgs = (args: unknown): args is {
   target_ids: string[];
 } =>
   isObject(args) &&
-  isNumericId(args.issue_id) &&
+  isIssueId(args.issue_id) &&
   Array.isArray(args.target_ids) &&
-  args.target_ids.every(isNumericId) &&
+  args.target_ids.every(isIssueId) &&
   args.target_ids.length <= 10;
 
 export const isValidGetGroupingConfigArgs = (args: unknown): args is {
   issue_id: string;
 } =>
   isObject(args) &&
-  isNumericId(args.issue_id);
+  isIssueId(args.issue_id);
 
 // ============================================================
 // Raw API Type Guard

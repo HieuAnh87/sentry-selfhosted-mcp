@@ -42,6 +42,42 @@ const BAD_NUMERIC_IDS = [
   [null, 'null'],
 ];
 
+/** Accepted wherever an issue id (numeric or short ID) is required. */
+const GOOD_ISSUE_IDS = ['123', '0', '99999999999999', 'WEB-1A3', 'my-project-2B', 'proj_x-Z9', 'a-1'];
+
+/**
+ * Rejected wherever an issue id is required. Short IDs widen the alphabet, so
+ * the cases target what must still never reach a URL path: separators,
+ * traversal, whitespace, escapes and malformed short IDs.
+ */
+const BAD_ISSUE_IDS = [
+  ['', 'empty string'],
+  [' 123', 'leading whitespace'],
+  ['123 ', 'trailing whitespace'],
+  ['WEB 1A3', 'an inner space'],
+  ['WEB-1A3\n', 'a trailing newline'],
+  ['1.5', 'a decimal point'],
+  ['-1', 'a leading minus'],
+  ['WEB-', 'a trailing hyphen'],
+  ['-WEB-1', 'a leading hyphen'],
+  ['WEB', 'a slug without a short id suffix'],
+  ['12a', 'digits with a letter but no separator'],
+  ['1e3', 'exponent notation'],
+  ['12/34', 'an embedded path separator'],
+  ['WEB-1/2', 'a path separator in a short id'],
+  ['WEB\\1', 'a backslash'],
+  ['../123', 'a traversal prefix'],
+  ['..', 'a bare traversal segment'],
+  ['WEB-..', 'a traversal suffix'],
+  ['WEB-1A3?x=1', 'a query separator'],
+  ['WEB-1A3#x', 'a fragment'],
+  ['WEB%2F1', 'a percent escape'],
+  ['web.app-1', 'a dot'],
+  [`P-${'1'.repeat(200)}`, 'an overlong id'],
+  [123, 'a number rather than a string'],
+  [null, 'null'],
+];
+
 /** Rejected wherever a project slug is required. */
 const BAD_SLUGS = [
   ['my/project', 'an embedded path separator'],
@@ -144,7 +180,7 @@ const table = [
       ...NON_OBJECTS,
       [{ issue_id: '123' }, 'a missing status'],
       [{ status: 'resolved' }, 'a missing issue_id'],
-      ...BAD_NUMERIC_IDS.map(([value, why]) => [{ issue_id: value, status: 'resolved' }, `issue_id with ${why}`]),
+      ...BAD_ISSUE_IDS.map(([value, why]) => [{ issue_id: value, status: 'resolved' }, `issue_id with ${why}`]),
       [{ issue_id: '123', status: 'RESOLVED' }, 'an enum value in the wrong case'],
       [{ issue_id: '123', status: 'deleted' }, 'a value outside the enum'],
       [{ issue_id: '123', status: null }, 'a null status'],
@@ -159,7 +195,7 @@ const table = [
     invalid: [
       ...NON_OBJECTS,
       [{ issue_id: '123' }, 'missing comment_text'],
-      ...BAD_NUMERIC_IDS.map(([value, why]) => [{ issue_id: value, comment_text: 'x' }, `issue_id with ${why}`]),
+      ...BAD_ISSUE_IDS.map(([value, why]) => [{ issue_id: value, comment_text: 'x' }, `issue_id with ${why}`]),
       [{ issue_id: '123', comment_text: 42 }, 'a non-string comment'],
     ],
   },
@@ -168,7 +204,7 @@ const table = [
     valid: [{ issue_id: '123' }, { issue_id: '123', cursor: 'abc' }],
     invalid: [
       ...NON_OBJECTS,
-      ...BAD_NUMERIC_IDS.map(([value, why]) => [{ issue_id: value }, `issue_id with ${why}`]),
+      ...BAD_ISSUE_IDS.map(([value, why]) => [{ issue_id: value }, `issue_id with ${why}`]),
       [{ issue_id: '123', cursor: 5 }, 'a non-string cursor'],
     ],
   },
@@ -177,6 +213,8 @@ const table = [
     valid: [
       { project_slug: 'p' },
       { project_slug: 'p', status: 'resolved', has_seen: true, assigned_to: 'me' },
+      { project_slug: 'p', issue_ids: ['1'], status: 'resolved' },
+      { project_slug: 'p', issue_ids: Array.from({ length: 100 }, (_, i) => String(i + 1)) },
     ],
     invalid: [
       ...NON_OBJECTS,
@@ -184,7 +222,22 @@ const table = [
       ...BAD_SLUGS.map(([value, why]) => [{ project_slug: value }, `project_slug with ${why}`]),
       [{ project_slug: 'p', status: 'archived' }, 'a value outside the enum'],
       [{ project_slug: 'p', has_seen: 'true' }, 'a string for a boolean'],
+      [{ project_slug: 'p', issue_ids: [] }, 'an empty issue_ids array'],
+      [{ project_slug: 'p', issue_ids: '1' }, 'a bare string for issue_ids'],
+      [{ project_slug: 'p', issue_ids: [1] }, 'a number in issue_ids'],
+      [{ project_slug: 'p', issue_ids: ['WEB-1A3'] }, 'a short ID in issue_ids (numeric only)'],
+      ...BAD_NUMERIC_IDS.filter(([value]) => typeof value === 'string')
+        .map(([value, why]) => [{ project_slug: 'p', issue_ids: ['1', value] }, `issue_ids with ${why}`]),
+      [
+        { project_slug: 'p', issue_ids: Array.from({ length: 101 }, (_, i) => String(i + 1)) },
+        'more than 100 issue_ids',
+      ],
     ],
+  },
+  {
+    guard: 'isValidListProjectsArgs',
+    valid: [{}, { cursor: '0:100:0' }],
+    invalid: [...NON_OBJECTS, [{ cursor: 5 }, 'a non-string cursor']],
   },
   {
     guard: 'isValidGetEventArgs',
@@ -213,7 +266,7 @@ const table = [
     valid: [{ issue_id: '1' }, { issue_id: '1', limit: 100, full: true }],
     invalid: [
       ...NON_OBJECTS,
-      ...BAD_NUMERIC_IDS.map(([value, why]) => [{ issue_id: value }, `issue_id with ${why}`]),
+      ...BAD_ISSUE_IDS.map(([value, why]) => [{ issue_id: value }, `issue_id with ${why}`]),
       ...BAD_LIMITS_1_100.map(([value, why]) => [{ issue_id: '1', limit: value }, `limit ${why}`]),
     ],
   },
@@ -277,7 +330,7 @@ const table = [
   {
     guard: 'isValidGetIssueTagsArgs',
     valid: [{ issue_id: '7' }],
-    invalid: [...NON_OBJECTS, ...BAD_NUMERIC_IDS.map(([value, why]) => [{ issue_id: value }, `issue_id with ${why}`])],
+    invalid: [...NON_OBJECTS, ...BAD_ISSUE_IDS.map(([value, why]) => [{ issue_id: value }, `issue_id with ${why}`])],
   },
   {
     guard: 'isValidGetIssueTagValuesArgs',
@@ -295,7 +348,7 @@ const table = [
     valid: [{ issue_id: '7' }, { issue_id: '7', limit: 1, cursor: 'c' }],
     invalid: [
       ...NON_OBJECTS,
-      ...BAD_NUMERIC_IDS.map(([value, why]) => [{ issue_id: value }, `issue_id with ${why}`]),
+      ...BAD_ISSUE_IDS.map(([value, why]) => [{ issue_id: value }, `issue_id with ${why}`]),
       ...BAD_LIMITS_1_100.map(([value, why]) => [{ issue_id: '7', limit: value }, `limit ${why}`]),
     ],
   },
@@ -317,13 +370,15 @@ const table = [
       { issue_id: '1', target_ids: [] },
       { issue_id: '1', target_ids: ['2', '3'] },
       { issue_id: '1', target_ids: Array.from({ length: 10 }, (_, i) => String(i)) },
+      { issue_id: 'WEB-1A3', target_ids: ['WEB-1A4', '42'] },
     ],
     invalid: [
       ...NON_OBJECTS,
       [{ issue_id: '1' }, 'missing target_ids'],
       [{ issue_id: '1', target_ids: '2' }, 'a bare string for an array'],
       [{ issue_id: '1', target_ids: [2, 3] }, 'numeric array elements'],
-      [{ issue_id: '1', target_ids: ['2', 'abc'] }, 'a non-numeric id in the array'],
+      [{ issue_id: '1', target_ids: ['2', 'abc'] }, 'an id that is neither numeric nor a short ID'],
+      ...BAD_ISSUE_IDS.map(([value, why]) => [{ issue_id: '1', target_ids: ['2', value] }, `target_ids with ${why}`]),
       [
         { issue_id: '1', target_ids: Array.from({ length: 11 }, (_, i) => String(i)) },
         'more than the 10-target maximum',
@@ -333,7 +388,7 @@ const table = [
   {
     guard: 'isValidGetGroupingConfigArgs',
     valid: [{ issue_id: '7' }],
-    invalid: [...NON_OBJECTS, ...BAD_NUMERIC_IDS.map(([value, why]) => [{ issue_id: value }, `issue_id with ${why}`])],
+    invalid: [...NON_OBJECTS, ...BAD_ISSUE_IDS.map(([value, why]) => [{ issue_id: value }, `issue_id with ${why}`])],
   },
   {
     guard: 'isValidRawApiArgs',
@@ -383,6 +438,42 @@ describe('helpers/index — argument type guards', () => {
         it(`rejects ${why}`, () => {
           assert.strictEqual(guard(args), false, `${guardName} should reject ${why}: ${JSON.stringify(args)}`);
         });
+      }
+    });
+  }
+});
+
+/** Every guard whose `issue_id` accepts short IDs, with the extra args it needs. */
+const ISSUE_ID_GUARDS = [
+  ['isValidUpdateIssueArgs', { status: 'resolved' }],
+  ['isValidCreateCommentArgs', { comment_text: 'x' }],
+  ['isValidGetIssueHashesArgs', {}],
+  ['isValidListIssueEventsArgs', {}],
+  ['isValidGetIssueTagsArgs', {}],
+  ['isValidGetIssueTagValuesArgs', { tag_key: 'env' }],
+  ['isValidListActivityArgs', {}],
+  ['isValidMergeIssuesArgs', { target_ids: [] }],
+  ['isValidGetGroupingConfigArgs', {}],
+];
+
+describe('helpers/index — issue ids (numeric or short ID)', () => {
+  it('isIssueId accepts numeric and short IDs', () => {
+    for (const id of GOOD_ISSUE_IDS) {
+      assert.strictEqual(guards.isIssueId(id), true, `isIssueId should accept ${JSON.stringify(id)}`);
+    }
+  });
+
+  for (const [value, why] of BAD_ISSUE_IDS) {
+    it(`isIssueId rejects ${why}`, () => {
+      assert.strictEqual(guards.isIssueId(value), false, `isIssueId should reject ${JSON.stringify(value)}`);
+    });
+  }
+
+  for (const [guardName, extra] of ISSUE_ID_GUARDS) {
+    it(`${guardName} accepts numeric and short issue IDs`, () => {
+      for (const id of GOOD_ISSUE_IDS) {
+        const args = { ...extra, issue_id: id };
+        assert.strictEqual(guards[guardName](args), true, `${guardName} should accept ${JSON.stringify(args)}`);
       }
     });
   }
