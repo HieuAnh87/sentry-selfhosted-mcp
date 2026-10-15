@@ -304,7 +304,7 @@ export async function handleGetSentryIssue(args: unknown): Promise<ToolResult> {
 
 export async function handleListSentryProjects(): Promise<ToolResult> {
   console.error(`Fetching projects for org ${ORG_SLUG}`);
-  const response = await sentryClient.listProjects(ORG_SLUG);
+  const response = (await sentryClient.listProjects(ORG_SLUG)).data;
 
   const projects = response.slice(0, 100).map(project => ({
     id: project.id,
@@ -339,7 +339,7 @@ export async function handleListSentryIssues(args: unknown): Promise<ToolResult>
   if (params.limit === undefined) params.limit = 25;
 
   console.error(`Fetching issues for project ${args.project_slug} in org ${ORG_SLUG}`);
-  const response = await sentryClient.listProjectIssues(ORG_SLUG, args.project_slug, params);
+  const response = (await sentryClient.listProjectIssues(ORG_SLUG, args.project_slug, params)).data;
 
   return truncatedTextResult(response);
 }
@@ -357,7 +357,7 @@ export async function handleListIssues(args: unknown): Promise<ToolResult> {
   if (params.limit === undefined) params.limit = 25;
 
   console.error(`Searching issues in org ${ORG_SLUG} with query: ${args.query || '(none)'}`);
-  const response = await sentryClient.searchIssues(ORG_SLUG, params);
+  const response = (await sentryClient.searchIssues(ORG_SLUG, params)).data;
 
   return truncatedTextResult(response);
 }
@@ -391,7 +391,7 @@ export async function handleGetIssueHashes(args: unknown): Promise<ToolResult> {
   if (args.cursor) params.cursor = args.cursor;
 
   console.error(`Getting hashes for issue ${args.issue_id}`);
-  const response = await sentryClient.getIssueHashes(args.issue_id, params);
+  const response = (await sentryClient.getIssueHashes(args.issue_id, params)).data;
 
   const rawHashes: unknown[] = Array.isArray(response) ? response : [];
   const hashes = rawHashes.slice(0, 25).map(extractEssentialHash);
@@ -414,13 +414,12 @@ export async function handleBulkUpdateIssues(args: unknown): Promise<ToolResult>
   }
 
   const body: Record<string, unknown> = {};
-  if (args.query) body.query = args.query;
   if (args.status) body.status = args.status;
   if (args.assigned_to) body.assignedTo = args.assigned_to;
   if (args.has_seen !== undefined) body.hasSeen = args.has_seen;
 
   console.error(`Bulk updating issues in project ${args.project_slug}`);
-  const response = await sentryClient.bulkUpdateProjectIssues(ORG_SLUG, args.project_slug, body);
+  const response = await sentryClient.bulkUpdateProjectIssues(ORG_SLUG, args.project_slug, { query: args.query }, body);
   return { content: [{ type: 'text', text: JSON.stringify(response, null, 2) }] };
 }
 

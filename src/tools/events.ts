@@ -223,7 +223,7 @@ export async function handleListIssueEvents(args: unknown): Promise<ToolResult> 
   if (params.limit === undefined) params.limit = 25;
 
   console.error(`Listing events for issue ${args.issue_id}`);
-  const rawEvents = await sentryClient.listIssueEvents(args.issue_id, params);
+  const rawEvents = (await sentryClient.listIssueEvents(args.issue_id, params)).data;
 
   let eventData: unknown = rawEvents;
   if (!args.full && Array.isArray(rawEvents)) {
@@ -254,7 +254,7 @@ export async function handleListErrorEvents(args: unknown): Promise<ToolResult> 
   if (params.limit === undefined) params.limit = 25;
 
   console.error(`Listing error events for project ${args.project_slug}`);
-  const rawEvents = await sentryClient.listProjectEvents(ORG_SLUG, args.project_slug, params);
+  const rawEvents = (await sentryClient.listProjectEvents(ORG_SLUG, args.project_slug, params)).data;
 
   let eventData: unknown = rawEvents;
   if (!args.full && Array.isArray(rawEvents)) {
@@ -346,7 +346,7 @@ export async function handleCheckDsymStatus(args: unknown): Promise<ToolResult> 
   if (args.event_id) {
     eventData = await sentryClient.getEvent(ORG_SLUG, args.project_slug, args.event_id);
   } else {
-    const issuesResponse = await sentryClient.listProjectIssues(ORG_SLUG, args.project_slug, { limit: 1 });
+    const issuesResponse = (await sentryClient.listProjectIssues(ORG_SLUG, args.project_slug, { limit: 1 })).data;
 
     if (!issuesResponse || issuesResponse.length === 0) {
       return {

@@ -19,9 +19,9 @@ describe('api/client', () => {
     assert.equal(nock.isDone(), true, `Pending mocks: ${nock.pendingMocks().join(', ')}`);
   });
 
-  it('getIssue calls issues/{id}/ endpoint', async () => {
+  it('getIssue calls the organization-scoped issue endpoint', async () => {
     nock(BASE)
-      .get('/api/0/issues/123/')
+      .get('/api/0/organizations/org/issues/123/')
       .reply(200, { id: '123', title: 'Issue 123' });
 
     const issue = await sentryClient.getIssue('123');
@@ -34,7 +34,7 @@ describe('api/client', () => {
       .query({ limit: 10, query: 'is:unresolved' })
       .reply(200, [{ id: '1' }]);
 
-    const issues = await sentryClient.listProjectIssues('org', 'mobile', {
+    const { data: issues } = await sentryClient.listProjectIssues('org', 'mobile', {
       limit: 10,
       query: 'is:unresolved',
     });
@@ -59,20 +59,12 @@ describe('api/client', () => {
     const encoded = encodeURIComponent(tagKey);
 
     nock(BASE)
-      .get(`/api/0/issues/999/tags/${encoded}/values/`)
+      .get(`/api/0/organizations/org/issues/999/tags/${encoded}/values/`)
       .query({ limit: 5 })
       .reply(200, [{ value: 'a@x.com', count: 2 }]);
 
-    const values = await sentryClient.getIssueTagValues('999', tagKey, { limit: 5 });
+    const { data: values } = await sentryClient.getIssueTagValues('999', tagKey, { limit: 5 });
     assert.equal(values[0].value, 'a@x.com');
   });
 
-  it('mergeIssues posts targetIds payload', async () => {
-    nock(BASE)
-      .post('/api/0/issues/777/hashes/', { targetIds: ['888', '999'] })
-      .reply(200, { ok: true });
-
-    const result = await sentryClient.mergeIssues('777', ['888', '999']);
-    assert.deepEqual(result, { ok: true });
-  });
 });

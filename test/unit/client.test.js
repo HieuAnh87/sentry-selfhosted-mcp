@@ -8,6 +8,9 @@
  *  - an absolute URL can never redirect a request (and its Authorization
  *    header) away from the configured Sentry host
  *  - getIssueHashes yields hash objects, matching its declared return type
+ *  - pagination cursors are read from the Link header
+ *  - bulk mutations put their selection in the URL and refuse an empty one
+ *  - merge, trace, activity and grouping use endpoints Sentry actually serves
  */
 
 import { describe, it, beforeEach, afterEach } from 'node:test';
@@ -33,7 +36,7 @@ describe('api/client — HTTP method contract', () => {
       .query({ query: 'is:unresolved', limit: 25 })
       .reply(200, [{ id: '1' }]);
 
-    const issues = await sentryClient.searchIssues('org', { query: 'is:unresolved', limit: 25 });
+    const { data: issues } = await sentryClient.searchIssues('org', { query: 'is:unresolved', limit: 25 });
 
     assert.deepStrictEqual(issues, [{ id: '1' }]);
     assert.ok(scope.isDone(), 'the GET interceptor should have been consumed');
@@ -43,7 +46,7 @@ describe('api/client — HTTP method contract', () => {
     const post = nock(BASE).post('/api/0/organizations/org/issues/').reply(200, [{ id: 'from-post' }]);
     nock(BASE).get('/api/0/organizations/org/issues/').query(true).reply(200, [{ id: 'from-get' }]);
 
-    const issues = await sentryClient.searchIssues('org', {});
+    const { data: issues } = await sentryClient.searchIssues('org', {});
 
     assert.deepStrictEqual(issues, [{ id: 'from-get' }]);
     assert.strictEqual(post.isDone(), false, 'listing issues must not use POST');
@@ -56,7 +59,7 @@ describe('api/client — path segment encoding', () => {
 
   it('encodes separators in an issue id instead of letting them add path structure', async () => {
     const scope = nock(BASE)
-      .get(`/api/0/issues/${encodeURIComponent('123/../../admin')}/`)
+      .get(`/api/0/organizations/org/issues/${encodeURIComponent('123/../../admin')}/`)
       .reply(200, { id: 'encoded' });
 
     const issue = await sentryClient.getIssue('123/../../admin');
@@ -99,11 +102,11 @@ describe('api/client — path segment encoding', () => {
 
   it('encodes a tag key', async () => {
     const scope = nock(BASE)
-      .get(`/api/0/issues/999/tags/${encodeURIComponent('user.email')}/values/`)
+      .get(`/api/0/organizations/org/issues/999/tags/${encodeURIComponent('user.email')}/values/`)
       .query({ limit: 5 })
       .reply(200, [{ value: 'a@x.com', count: 2 }]);
 
-    const values = await sentryClient.getIssueTagValues('999', 'user.email', { limit: 5 });
+    const { data: values } = await sentryClient.getIssueTagValues('999', 'user.email', { limit: 5 });
 
     assert.strictEqual(values[0].value, 'a@x.com');
     assert.ok(scope.isDone());
@@ -111,7 +114,7 @@ describe('api/client — path segment encoding', () => {
 
   it('encodes a trace id', async () => {
     const scope = nock(BASE)
-      .get(`/api/0/traces/${encodeURIComponent('t/../../x')}/`)
+      .get(`/api/0/organizations/org/trace/${encodeURIComponent('t/../../x')}/`)
       .reply(200, {});
 
     await sentryClient.getTrace('t/../../x');
@@ -176,9 +179,9 @@ describe('api/client — response shapes', () => {
       { id: 'abc123', latestEvent: { eventID: 'e1' } },
       { id: 'def456', latestEvent: { eventID: 'e2' } },
     ];
-    nock(BASE).get('/api/0/issues/123/hashes/').reply(200, hashes);
+    nock(BASE).get('/api/0/organizations/org/issues/123/hashes/').reply(200, hashes);
 
-    const result = await sentryClient.getIssueHashes('123');
+    const { data: result } = await sentryClient.getIssueHashes('123');
 
     assert.ok(Array.isArray(result));
     assert.strictEqual(typeof result[0], 'object', 'a hash is an object with an id, not a string');
@@ -186,12 +189,137 @@ describe('api/client — response shapes', () => {
     assert.strictEqual(result[0].latestEvent.eventID, 'e1');
   });
 
-  it('mergeIssues posts the targetIds payload', async () => {
-    const scope = nock(BASE).post('/api/0/issues/777/hashes/', { targetIds: ['888', '999'] }).reply(200, { ok: true });
+  it('resolves short IDs through the organization-scoped issue path', async () => {
+    const scope = nock(BASE).get('/api/0/organizations/org/issues/WEB-1A3/').reply(200, { id: '42' });
 
-    const result = await sentryClient.mergeIssues('777', ['888', '999']);
+    const issue = await sentryClient.getIssue('WEB-1A3');
 
-    assert.deepStrictEqual(result, { ok: true });
+    assert.strictEqual(issue.id, '42');
     assert.ok(scope.isDone());
+  });
+
+  it('lists issue activity from the activities/ route', async () => {
+    const scope = nock(BASE).get('/api/0/organizations/org/issues/5/activities/').reply(200, []);
+
+    await sentryClient.listIssueActivity('5');
+
+    assert.ok(scope.isDone());
+  });
+
+  it('reads grouping info for an event', async () => {
+    const scope = nock(BASE)
+      .get('/api/0/projects/org/web/events/abc/grouping-info/')
+      .reply(200, { 'default': { hash: 'h' } });
+
+    const info = await sentryClient.getGroupingInfo('web', 'abc');
+
+    assert.deepStrictEqual(info, { 'default': { hash: 'h' } });
+    assert.ok(scope.isDone());
+  });
+});
+
+describe('api/client — pagination', () => {
+  beforeEach(() => nock.cleanAll());
+  afterEach(() => nock.cleanAll());
+
+  const link = (nextResults) =>
+    `<${BASE}/api/0/projects/org/web/issues/?&cursor=0:0:1>; rel="previous"; results="false"; cursor="0:0:1", ` +
+    `<${BASE}/api/0/projects/org/web/issues/?&cursor=0:25:0>; rel="next"; results="${nextResults}"; cursor="0:25:0"`;
+
+  it('surfaces the next cursor when Sentry reports more results', async () => {
+    nock(BASE).get('/api/0/projects/org/web/issues/').reply(200, [{ id: '1' }], { Link: link('true') });
+
+    const page = await sentryClient.listProjectIssues('org', 'web');
+
+    assert.deepStrictEqual(page, { data: [{ id: '1' }], nextCursor: '0:25:0', hasMore: true });
+  });
+
+  it('reports no next page when results="false"', async () => {
+    nock(BASE).get('/api/0/projects/org/web/issues/').reply(200, [], { Link: link('false') });
+
+    const page = await sentryClient.listProjectIssues('org', 'web');
+
+    assert.strictEqual(page.hasMore, false);
+    assert.strictEqual(page.nextCursor, undefined);
+  });
+
+  it('reports no next page when the Link header is absent', async () => {
+    nock(BASE).get('/api/0/organizations/org/teams/').reply(200, []);
+
+    const page = await sentryClient.listTeams('org');
+
+    assert.deepStrictEqual(page, { data: [], hasMore: false });
+  });
+});
+
+describe('api/client — bulk mutation selection', () => {
+  beforeEach(() => nock.cleanAll());
+  afterEach(() => nock.cleanAll());
+
+  it('sends the query in the URL, where Sentry reads it, not in the body', async () => {
+    const scope = nock(BASE)
+      .put('/api/0/projects/org/web/issues/', body => body.query === undefined && body.status === 'resolved')
+      .query({ query: 'is:unresolved environment:staging' })
+      .reply(200, { status: 'resolved' });
+
+    await sentryClient.bulkUpdateProjectIssues('org', 'web', { query: 'is:unresolved environment:staging' }, { status: 'resolved' });
+
+    assert.ok(scope.isDone());
+  });
+
+  it('repeats id= for each issue instead of id[]=', async () => {
+    const scope = nock(BASE)
+      .put('/api/0/projects/org/web/issues/')
+      .query(q => JSON.stringify(q.id) === JSON.stringify(['1', '2']) && !('id[]' in q))
+      .reply(200, {});
+
+    await sentryClient.bulkUpdateProjectIssues('org', 'web', { ids: ['1', '2'] }, { status: 'resolved' });
+
+    assert.ok(scope.isDone());
+  });
+
+  it('refuses a mutation with neither ids nor a query', async () => {
+    const sentry = nock(BASE).put(() => true).reply(200, {});
+
+    await assert.rejects(
+      sentryClient.bulkUpdateProjectIssues('org', 'web', { query: '   ' }, { status: 'resolved' }),
+      /without issue IDs or a query/
+    );
+    assert.strictEqual(sentry.isDone(), false, 'no request may reach Sentry');
+  });
+
+  it('merges through the bulk-mutate endpoint with merge: true', async () => {
+    const scope = nock(BASE)
+      .put('/api/0/projects/org/web/issues/', { merge: true })
+      .query(q => JSON.stringify(q.id) === JSON.stringify(['777', '888']))
+      .reply(200, { merge: { parent: '777', children: ['888'] } });
+
+    const result = await sentryClient.mergeIssues('web', ['777', '888']);
+
+    assert.deepStrictEqual(result, { merge: { parent: '777', children: ['888'] } });
+    assert.ok(scope.isDone());
+  });
+});
+
+describe('api/client — trace endpoint', () => {
+  beforeEach(() => nock.cleanAll());
+  afterEach(() => nock.cleanAll());
+
+  it('falls back to events-trace/ when trace/ does not exist', async () => {
+    nock(BASE).get('/api/0/organizations/org/trace/abc/').reply(404, { detail: 'Not found' });
+    const fallback = nock(BASE).get('/api/0/organizations/org/events-trace/abc/').reply(200, { transactions: [] });
+
+    const trace = await sentryClient.getTrace('abc');
+
+    assert.deepStrictEqual(trace, { transactions: [] });
+    assert.ok(fallback.isDone());
+  });
+
+  it('does not fall back on other errors', async () => {
+    nock(BASE).get('/api/0/organizations/org/trace/abc/').reply(403, { detail: 'Forbidden' });
+    const fallback = nock(BASE).get('/api/0/organizations/org/events-trace/abc/').reply(200, {});
+
+    await assert.rejects(sentryClient.getTrace('abc'));
+    assert.strictEqual(fallback.isDone(), false);
   });
 });

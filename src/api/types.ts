@@ -27,6 +27,13 @@ export interface SentryIssue {
   [key: string]: unknown;
 }
 
+/** A list response plus Sentry's cursor pagination state. */
+export interface Paged<T> {
+  data: T;
+  nextCursor?: string;
+  hasMore: boolean;
+}
+
 /**
  * Entry of `GET /issues/{id}/hashes/`.
  * Sentry's hash serializer returns objects (id + embedded latest event),

@@ -26,7 +26,7 @@ const { handleGetSentryIssue, handleListSentryProjects, handleToolError } =
   await import('../../build/tools/issues.js');
 
 const BASE = 'https://sentry.test.local';
-const ISSUE_PATH = '/api/0/issues/123/';
+const ISSUE_PATH = '/api/0/organizations/org/issues/123/';
 const PROJECTS_PATH = '/api/0/organizations/org/projects/';
 
 /**

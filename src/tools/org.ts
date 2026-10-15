@@ -82,7 +82,7 @@ export const list_activity_tool: ToolDefinition = {
 
 export async function handleListTeams(): Promise<ToolResult> {
   console.error(`Listing teams in org ${ORG_SLUG}`);
-  const teams = await sentryClient.listTeams(ORG_SLUG);
+  const teams = (await sentryClient.listTeams(ORG_SLUG)).data;
   return { content: [{ type: 'text', text: JSON.stringify(teams, null, 2) }] };
 }
 
@@ -120,7 +120,7 @@ export async function handleGetIssueTagValues(args: unknown): Promise<ToolResult
   const params: Record<string, number> = { limit };
 
   console.error(`Fetching tag values for key "${args.tag_key}" on issue ${args.issue_id}`);
-  const values = await sentryClient.getIssueTagValues(args.issue_id, args.tag_key, params);
+  const values = (await sentryClient.getIssueTagValues(args.issue_id, args.tag_key, params)).data;
 
   const total = values.reduce((sum, v) => sum + v.count, 0);
   const returned = values.slice(0, limit);
@@ -154,7 +154,7 @@ export async function handleListActivity(args: unknown): Promise<ToolResult> {
   if (params.limit === undefined) params.limit = 25;
 
   console.error(`Fetching activity for issue ${args.issue_id}`);
-  const activities = await sentryClient.listIssueActivity(args.issue_id, params);
+  const activities = (await sentryClient.listIssueActivity(args.issue_id, params)).data;
 
   return truncatedTextResult(activities);
 }

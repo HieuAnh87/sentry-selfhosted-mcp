@@ -114,7 +114,7 @@ export async function handleListReleases(args: unknown): Promise<ToolResult> {
   if (params.limit === undefined) params.limit = 25;
 
   console.error(`Listing releases in org ${ORG_SLUG}`);
-  const response = await sentryClient.listReleases(ORG_SLUG, params);
+  const response = (await sentryClient.listReleases(ORG_SLUG, params)).data;
 
   return truncatedTextResult(response);
 }

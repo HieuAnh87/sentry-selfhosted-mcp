@@ -1,8 +1,9 @@
 // Sentry API Client — Axios wrapper
 
 import axios, { AxiosError, AxiosResponse } from 'axios';
-import { BASE_URL, AUTH_TOKEN, TIMEOUT_MS } from '../config.js';
-import type { SentryIssue, SentryIssueHash, SentryEvent, SentryRelease, SentryTeam, SentryTag, SentryTagValue, SentryActivity, SentryTrace, SentryGroupingConfig, SentryProject } from './types.js';
+import { BASE_URL, AUTH_TOKEN, TIMEOUT_MS, ORG_SLUG } from '../config.js';
+import { parseLinkHeader } from '../helpers/pagination.js';
+import type { SentryIssue, SentryIssueHash, SentryEvent, SentryRelease, SentryTeam, SentryTag, SentryTagValue, SentryActivity, SentryTrace, SentryGroupingConfig, SentryProject, Paged } from './types.js';
 
 // Re-export types for convenience
 export type {
@@ -17,11 +18,32 @@ export type {
   SentryTrace,
   SentryGroupingConfig,
   SentryProject,
+  Paged,
 };
 
 /** Percent-encode a value before interpolating it into an API path segment. */
 function seg(value: string): string {
   return encodeURIComponent(value);
+}
+
+/** Which issues a bulk mutation applies to. At least one of the two is required. */
+export interface IssueSelector {
+  ids?: string[];
+  query?: string;
+}
+
+function selectorParams(selector: IssueSelector): URLSearchParams {
+  const ids = (selector.ids ?? []).filter(id => id.trim() !== '');
+  const query = selector.query?.trim();
+  if (ids.length === 0 && !query) {
+    throw new Error('Refusing bulk issue mutation without issue IDs or a query: Sentry would apply it to every unresolved issue.');
+  }
+
+  // URLSearchParams repeats `id=` per value; axios' default array encoding (`id[]=`) is not understood by Sentry.
+  const params = new URLSearchParams();
+  for (const id of ids) params.append('id', id);
+  if (query) params.append('query', query);
+  return params;
 }
 
 export class SentryApiClient {
@@ -63,13 +85,20 @@ export class SentryApiClient {
     return response.data;
   }
 
+  /** GET that also reports Sentry's `Link` pagination state. */
+  async getPaged<T>(endpoint: string, params?: Record<string, unknown>): Promise<Paged<T>> {
+    const response = await this.client.get<T>(endpoint, { params });
+    const link = response.headers?.link;
+    return { data: response.data, ...parseLinkHeader(typeof link === 'string' ? link : undefined) };
+  }
+
   async post<T>(endpoint: string, data?: unknown, params?: Record<string, unknown>): Promise<T> {
     const response = await this.client.post<T>(endpoint, data ?? {}, { params });
     return response.data;
   }
 
-  async put<T>(endpoint: string, data?: unknown): Promise<T> {
-    const response = await this.client.put<T>(endpoint, data ?? {});
+  async put<T>(endpoint: string, data?: unknown, params?: Record<string, unknown> | URLSearchParams): Promise<T> {
+    const response = await this.client.put<T>(endpoint, data ?? {}, { params });
     return response.data;
   }
 
@@ -78,37 +107,59 @@ export class SentryApiClient {
     return response.data;
   }
 
+  /**
+   * Issue-scoped path. The organization-scoped form is used because only it
+   * resolves short IDs (e.g. `PROJ-1A2`); the legacy `issues/{id}/` path 404s on them.
+   */
+  private issuePath(issueId: string, suffix = ''): string {
+    return `organizations/${seg(ORG_SLUG)}/issues/${seg(issueId)}/${suffix}`;
+  }
+
   // ============================================================
   // Issues
   // ============================================================
 
   async getIssue(issueId: string): Promise<SentryIssue> {
-    return this.get<SentryIssue>(`issues/${seg(issueId)}/`);
+    return this.get<SentryIssue>(this.issuePath(issueId));
   }
 
-  async listProjectIssues(orgSlug: string, projectSlug: string, params?: Record<string, unknown>): Promise<SentryIssue[]> {
-    return this.get<SentryIssue[]>(`projects/${seg(orgSlug)}/${seg(projectSlug)}/issues/`, params);
+  async listProjectIssues(orgSlug: string, projectSlug: string, params?: Record<string, unknown>): Promise<Paged<SentryIssue[]>> {
+    return this.getPaged<SentryIssue[]>(`projects/${seg(orgSlug)}/${seg(projectSlug)}/issues/`, params);
   }
 
-  async searchIssues(orgSlug: string, params?: Record<string, unknown>): Promise<SentryIssue[]> {
+  async searchIssues(orgSlug: string, params?: Record<string, unknown>): Promise<Paged<SentryIssue[]>> {
     // Listing an organization's issues is a GET (PUT mutates, DELETE removes).
-    return this.get<SentryIssue[]>(`organizations/${seg(orgSlug)}/issues/`, params);
+    return this.getPaged<SentryIssue[]>(`organizations/${seg(orgSlug)}/issues/`, params);
   }
 
   async updateIssue(issueId: string, data: { status?: string }): Promise<SentryIssue> {
-    return this.put<SentryIssue>(`issues/${seg(issueId)}/`, data);
+    return this.put<SentryIssue>(this.issuePath(issueId), data);
   }
 
   async createIssueComment(issueId: string, text: string): Promise<unknown> {
-    return this.post(`issues/${seg(issueId)}/comments/`, { text });
+    return this.post(this.issuePath(issueId, 'comments/'), { text });
   }
 
-  async getIssueHashes(issueId: string, params?: Record<string, unknown>): Promise<SentryIssueHash[]> {
-    return this.get<SentryIssueHash[]>(`issues/${seg(issueId)}/hashes/`, params);
+  async getIssueHashes(issueId: string, params?: Record<string, unknown>): Promise<Paged<SentryIssueHash[]>> {
+    return this.getPaged<SentryIssueHash[]>(this.issuePath(issueId, 'hashes/'), params);
   }
 
-  async bulkUpdateProjectIssues(orgSlug: string, projectSlug: string, data: Record<string, unknown>): Promise<unknown> {
-    return this.put(`projects/${seg(orgSlug)}/${seg(projectSlug)}/issues/`, data);
+  /**
+   * Bulk-mutate issues in a project. Sentry reads the selection (`id`, `query`)
+   * from the URL only and ignores it in the body; with no selection it falls back
+   * to every unresolved issue (up to 1000), so an empty selector is refused here.
+   */
+  async bulkUpdateProjectIssues(
+    orgSlug: string,
+    projectSlug: string,
+    selector: IssueSelector,
+    data: Record<string, unknown>
+  ): Promise<unknown> {
+    return this.put(
+      `projects/${seg(orgSlug)}/${seg(projectSlug)}/issues/`,
+      data,
+      selectorParams(selector)
+    );
   }
 
   // ============================================================
@@ -119,12 +170,12 @@ export class SentryApiClient {
     return this.get<SentryEvent>(`projects/${seg(orgSlug)}/${seg(projectSlug)}/events/${seg(eventId)}/`);
   }
 
-  async listIssueEvents(issueId: string, params?: Record<string, unknown>): Promise<SentryEvent[]> {
-    return this.get<SentryEvent[]>(`issues/${seg(issueId)}/events/`, params);
+  async listIssueEvents(issueId: string, params?: Record<string, unknown>): Promise<Paged<SentryEvent[]>> {
+    return this.getPaged<SentryEvent[]>(this.issuePath(issueId, 'events/'), params);
   }
 
-  async listProjectEvents(orgSlug: string, projectSlug: string, params?: Record<string, unknown>): Promise<SentryEvent[]> {
-    return this.get<SentryEvent[]>(`projects/${seg(orgSlug)}/${seg(projectSlug)}/events/`, params);
+  async listProjectEvents(orgSlug: string, projectSlug: string, params?: Record<string, unknown>): Promise<Paged<SentryEvent[]>> {
+    return this.getPaged<SentryEvent[]>(`projects/${seg(orgSlug)}/${seg(projectSlug)}/events/`, params);
   }
 
   async getLatestEventForIssue(orgSlug: string, issueId: string): Promise<SentryEvent> {
@@ -135,8 +186,8 @@ export class SentryApiClient {
   // Releases
   // ============================================================
 
-  async listReleases(orgSlug: string, params?: Record<string, unknown>): Promise<SentryRelease[]> {
-    return this.get<SentryRelease[]>(`organizations/${seg(orgSlug)}/releases/`, params);
+  async listReleases(orgSlug: string, params?: Record<string, unknown>): Promise<Paged<SentryRelease[]>> {
+    return this.getPaged<SentryRelease[]>(`organizations/${seg(orgSlug)}/releases/`, params);
   }
 
   async getRelease(orgSlug: string, version: string): Promise<SentryRelease> {
@@ -144,15 +195,15 @@ export class SentryApiClient {
   }
 
   // ============================================================
-  // Organization
+  // Projects & Teams
   // ============================================================
 
-  async listProjects(orgSlug: string): Promise<SentryProject[]> {
-    return this.get<SentryProject[]>(`organizations/${seg(orgSlug)}/projects/`);
+  async listProjects(orgSlug: string, params?: Record<string, unknown>): Promise<Paged<SentryProject[]>> {
+    return this.getPaged<SentryProject[]>(`organizations/${seg(orgSlug)}/projects/`, params);
   }
 
-  async listTeams(orgSlug: string): Promise<SentryTeam[]> {
-    return this.get<SentryTeam[]>(`organizations/${seg(orgSlug)}/teams/`);
+  async listTeams(orgSlug: string, params?: Record<string, unknown>): Promise<Paged<SentryTeam[]>> {
+    return this.getPaged<SentryTeam[]>(`organizations/${seg(orgSlug)}/teams/`, params);
   }
 
   // ============================================================
@@ -160,31 +211,53 @@ export class SentryApiClient {
   // ============================================================
 
   async getIssueTags(issueId: string): Promise<SentryTag[]> {
-    return this.get<SentryTag[]>(`issues/${seg(issueId)}/tags/`);
+    return this.get<SentryTag[]>(this.issuePath(issueId, 'tags/'));
   }
 
-  async getIssueTagValues(issueId: string, tagKey: string, params?: Record<string, unknown>): Promise<SentryTagValue[]> {
-    return this.get<SentryTagValue[]>(`issues/${seg(issueId)}/tags/${seg(tagKey)}/values/`, params);
+  async getIssueTagValues(issueId: string, tagKey: string, params?: Record<string, unknown>): Promise<Paged<SentryTagValue[]>> {
+    return this.getPaged<SentryTagValue[]>(this.issuePath(issueId, `tags/${seg(tagKey)}/values/`), params);
   }
 
-  async listIssueActivity(issueId: string, params?: Record<string, unknown>): Promise<SentryActivity[]> {
-    return this.get<SentryActivity[]>(`issues/${seg(issueId)}/activity/`, params);
+  async listIssueActivity(issueId: string, params?: Record<string, unknown>): Promise<Paged<SentryActivity[]>> {
+    // The route is `activities/`; `activity/` does not exist and 404s.
+    return this.getPaged<SentryActivity[]>(this.issuePath(issueId, 'activities/'), params);
   }
 
   // ============================================================
   // Advanced
   // ============================================================
 
-  async getTrace(traceId: string): Promise<SentryTrace> {
-    return this.get<SentryTrace>(`traces/${seg(traceId)}/`);
+  /**
+   * Trace tree. `trace/` is the current endpoint; older self-hosted versions
+   * only have `events-trace/`, so a 404 falls back to it.
+   */
+  async getTrace(traceId: string, params?: Record<string, unknown>): Promise<unknown> {
+    try {
+      return await this.get<unknown>(`organizations/${seg(ORG_SLUG)}/trace/${seg(traceId)}/`, params);
+    } catch (error) {
+      if (!(error instanceof AxiosError) || error.response?.status !== 404) throw error;
+      return this.get<unknown>(`organizations/${seg(ORG_SLUG)}/events-trace/${seg(traceId)}/`, params);
+    }
   }
 
-  async getGroupingConfig(issueId: string): Promise<SentryGroupingConfig[]> {
-    return this.get<SentryGroupingConfig[]>(`issues/${seg(issueId)}/grouping-config/`);
+  /** Grouping (fingerprint) breakdown for one event. There is no issue-level equivalent. */
+  async getGroupingInfo(projectSlug: string, eventId: string): Promise<Record<string, unknown>> {
+    return this.get<Record<string, unknown>>(
+      `projects/${seg(ORG_SLUG)}/${seg(projectSlug)}/events/${seg(eventId)}/grouping-info/`
+    );
   }
 
-  async mergeIssues(issueId: string, targetIds: string[]): Promise<unknown> {
-    return this.post(`issues/${seg(issueId)}/hashes/`, { targetIds });
+  /**
+   * Merge issues. Sentry merges through the bulk-mutate endpoint with `{merge: true}`
+   * and picks the surviving parent itself; all issues must belong to one project.
+   * Responds with `{merge: {parent, children}}`.
+   */
+  async mergeIssues(projectSlug: string, issueIds: string[]): Promise<unknown> {
+    return this.put(
+      `projects/${seg(ORG_SLUG)}/${seg(projectSlug)}/issues/`,
+      { merge: true },
+      selectorParams({ ids: issueIds })
+    );
   }
 }
 
