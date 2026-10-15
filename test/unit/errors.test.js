@@ -152,6 +152,74 @@ describe('tool error mapping', () => {
   });
 });
 
+describe('tool error messages carry Sentry\'s explanation, bounded', () => {
+  beforeEach(() => nock.cleanAll());
+  afterEach(() => nock.cleanAll());
+
+  const getIssue = () => callTool(() => handleGetSentryIssue({ issue_id_or_url: '123' }), 'get_sentry_issue');
+
+  for (const status of [401, 403, 404]) {
+    it(`keeps Sentry's detail string on ${status}`, async () => {
+      nock(BASE).get(ISSUE_PATH).reply(status, { detail: `Sentry explanation for ${status}` });
+
+      const result = await getIssue();
+
+      assert.strictEqual(result.isError, true);
+      assert.match(textOf(result), new RegExp(`Sentry explanation for ${status}`));
+      assert.match(textOf(result), new RegExp(`HTTP ${status}`));
+    });
+  }
+
+  it('points a 404 at the discovery tools', async () => {
+    nock(BASE).get(ISSUE_PATH).reply(404, { detail: 'The requested resource does not exist' });
+
+    const text = textOf(await getIssue());
+
+    assert.match(text, /list_sentry_projects/);
+    assert.match(text, /list_issues/);
+    assert.match(text, /short ID/i);
+  });
+
+  it('mentions Retry-After on a 429 when Sentry sends it', async () => {
+    nock(BASE).get(ISSUE_PATH).reply(429, { detail: 'Rate limit exceeded' }, { 'Retry-After': '17' });
+
+    const text = textOf(await getIssue());
+
+    assert.match(text, /429/);
+    assert.match(text, /Retry-After: 17/);
+    assert.match(text, /Rate limit exceeded/);
+  });
+
+  it('still reports a 429 without a Retry-After header', async () => {
+    nock(BASE).get(ISSUE_PATH).reply(429, {});
+
+    const text = textOf(await getIssue());
+
+    assert.match(text, /429/);
+    assert.doesNotMatch(text, /Retry-After/);
+  });
+
+  it('caps a huge response body at about 500 characters', async () => {
+    const huge = 'x'.repeat(20_000);
+    nock(BASE).get(ISSUE_PATH).reply(502, { error: huge });
+
+    const text = textOf(await getIssue());
+
+    assert.match(text, /502/);
+    assert.match(text, /truncated/);
+    assert.ok(text.length < 1000, `error text should be bounded, got ${text.length} chars`);
+  });
+
+  it('caps a huge detail string too', async () => {
+    nock(BASE).get(ISSUE_PATH).reply(403, { detail: 'y'.repeat(5000) });
+
+    const text = textOf(await getIssue());
+
+    assert.match(text, /permission denied/i);
+    assert.ok(text.length < 1000, `error text should be bounded, got ${text.length} chars`);
+  });
+});
+
 describe('tool error messages never leak the auth token', () => {
   beforeEach(() => nock.cleanAll());
   afterEach(() => nock.cleanAll());
