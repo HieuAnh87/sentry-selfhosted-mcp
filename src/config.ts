@@ -15,6 +15,7 @@ export const CONFIG = {
 const SENTRY_URL = process.env.SENTRY_URL;
 const SENTRY_AUTH_TOKEN = process.env.SENTRY_AUTH_TOKEN;
 const SENTRY_ORG_SLUG = process.env.SENTRY_ORG_SLUG;
+const SENTRY_READ_ONLY = process.env.SENTRY_READ_ONLY;
 
 // Validate required environment variables
 export function validateConfig(): void {
@@ -46,6 +47,9 @@ export const SENTRY_BASE_URL = SENTRY_URL!.endsWith('/')
 
 export const AUTH_TOKEN = SENTRY_AUTH_TOKEN!;
 export const ORG_SLUG = SENTRY_ORG_SLUG!;
+
+// Opt-in read-only mode: blocks mutating tools and non-GET raw API calls (default: false)
+export const READ_ONLY = ['true', '1'].includes((SENTRY_READ_ONLY ?? '').trim().toLowerCase());
 
 export const BASE_URL = SENTRY_BASE_URL;
 export const TIMEOUT_MS = CONFIG.TIMEOUT_MS;

@@ -3,7 +3,6 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ErrorCode, ListToolsRequestSchema, ListResourcesRequestSchema, McpError } from '@modelcontextprotocol/sdk/types.js';
-import axios, { AxiosError } from 'axios';
 
 // Tools
 import {
@@ -74,7 +73,7 @@ import {
 import { isValidRawApiArgs } from './helpers/index.js';
 import { grepFilter } from './helpers/grep.js';
 import { sentryClient } from './api/client.js';
-import { ORG_SLUG, BASE_URL } from './config.js';
+import { ORG_SLUG, BASE_URL, READ_ONLY } from './config.js';
 import type { ToolDefinition } from './api/types.js';
 
 // ============================================================
@@ -89,7 +88,7 @@ const raw_sentry_api_tool: ToolDefinition = {
     properties: {
       endpoint: {
         type: 'string',
-        description: "API endpoint path (e.g., 'projects/beoflow/apple-ios/events/abc123/'). Do NOT include /api/0/ prefix.",
+        description: "API endpoint path (e.g., 'projects/your-org/your-project/events/abc123/'). Do NOT include /api/0/ prefix.",
       },
       method: {
         type: 'string',
@@ -145,9 +144,19 @@ const TOOLS: ToolDefinition[] = [
   raw_sentry_api_tool,
 ];
 
+// Tools refused when SENTRY_READ_ONLY is enabled
+const MUTATING_TOOLS = [
+  'update_sentry_issue_status',
+  'create_sentry_issue_comment',
+  'bulk_update_issues',
+  'merge_issues',
+];
+
 // ============================================================
 // Server Class
 // ============================================================
+
+const SERVER_VERSION = '1.2.0';
 
 export class SelfHostedSentryServer {
   private server: Server;
@@ -156,7 +165,7 @@ export class SelfHostedSentryServer {
     this.server = new Server(
       {
         name: 'sentry-selfhosted-mcp',
-        version: '1.2.0',
+        version: SERVER_VERSION,
         description: 'MCP server for self-hosted Sentry instances with debugging-focused tools. 24 tools available.',
       },
       { capabilities: { resources: { list: true }, tools: {} } }
@@ -164,7 +173,8 @@ export class SelfHostedSentryServer {
 
     this.setupToolHandlers();
     this.setupResourceHandlers();
-    this.server.onerror = (error) => console.error('[MCP Error]', error);
+    // Log the message only: inspecting the error object would print the Authorization header
+    this.server.onerror = (error) => console.error('[MCP Error]', error instanceof Error ? error.message : String(error));
     process.on('SIGINT', async () => { await this.server.close(); process.exit(0); });
   }
 
@@ -179,43 +189,48 @@ export class SelfHostedSentryServer {
       const toolName = request.params.name;
       const args = request.params.arguments;
 
+      if (READ_ONLY && MUTATING_TOOLS.includes(toolName)) {
+        throw new McpError(ErrorCode.InvalidRequest, `Tool "${toolName}" is disabled: server is running in read-only mode (SENTRY_READ_ONLY).`);
+      }
+
       try {
+        // Every case must `await` so rejections reach the catch below
         switch (toolName) {
           // Issue tools
-          case 'get_sentry_issue': return handleGetSentryIssue(args);
-          case 'list_sentry_projects': return handleListSentryProjects();
-          case 'list_sentry_issues': return handleListSentryIssues(args);
-          case 'list_issues': return handleListIssues(args);
-          case 'update_sentry_issue_status': return handleUpdateIssueStatus(args);
-          case 'create_sentry_issue_comment': return handleCreateComment(args);
-          case 'get_issue_hashes': return handleGetIssueHashes(args);
-          case 'bulk_update_issues': return handleBulkUpdateIssues(args);
+          case 'get_sentry_issue': return await handleGetSentryIssue(args);
+          case 'list_sentry_projects': return await handleListSentryProjects();
+          case 'list_sentry_issues': return await handleListSentryIssues(args);
+          case 'list_issues': return await handleListIssues(args);
+          case 'update_sentry_issue_status': return await handleUpdateIssueStatus(args);
+          case 'create_sentry_issue_comment': return await handleCreateComment(args);
+          case 'get_issue_hashes': return await handleGetIssueHashes(args);
+          case 'bulk_update_issues': return await handleBulkUpdateIssues(args);
 
           // Event tools
-          case 'get_sentry_event_details': return handleGetSentryEventDetails(args);
-          case 'list_issue_events': return handleListIssueEvents(args);
-          case 'list_error_events': return handleListErrorEvents(args);
-          case 'get_stack_frames': return handleGetStackFrames(args);
-          case 'check_dsym_status': return handleCheckDsymStatus(args);
-          case 'list_breadcrumbs': return handleListBreadcrumbs(args);
+          case 'get_sentry_event_details': return await handleGetSentryEventDetails(args);
+          case 'list_issue_events': return await handleListIssueEvents(args);
+          case 'list_error_events': return await handleListErrorEvents(args);
+          case 'get_stack_frames': return await handleGetStackFrames(args);
+          case 'check_dsym_status': return await handleCheckDsymStatus(args);
+          case 'list_breadcrumbs': return await handleListBreadcrumbs(args);
 
           // Release tools
-          case 'list_releases': return handleListReleases(args);
-          case 'get_release_details': return handleGetReleaseDetails(args);
+          case 'list_releases': return await handleListReleases(args);
+          case 'get_release_details': return await handleGetReleaseDetails(args);
 
           // Org tools
-          case 'list_teams': return handleListTeams();
-          case 'get_issue_tags': return handleGetIssueTags(args);
-          case 'get_issue_tag_values': return handleGetIssueTagValues(args);
-          case 'list_activity': return handleListActivity(args);
+          case 'list_teams': return await handleListTeams();
+          case 'get_issue_tags': return await handleGetIssueTags(args);
+          case 'get_issue_tag_values': return await handleGetIssueTagValues(args);
+          case 'list_activity': return await handleListActivity(args);
 
           // Advanced tools
-          case 'get_trace_details': return handleGetTraceDetails(args);
-          case 'get_grouping_config': return handleGetGroupingConfig(args);
-          case 'merge_issues': return handleMergeIssues(args);
+          case 'get_trace_details': return await handleGetTraceDetails(args);
+          case 'get_grouping_config': return await handleGetGroupingConfig(args);
+          case 'merge_issues': return await handleMergeIssues(args);
 
           // Raw API
-          case 'raw_sentry_api': return handleRawApi(args);
+          case 'raw_sentry_api': return await handleRawApi(args);
 
           default:
             throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${toolName}`);
@@ -236,7 +251,7 @@ export class SelfHostedSentryServer {
   async run() {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error(`Self-hosted Sentry MCP server v1.2.0 running for org "${ORG_SLUG}" at ${BASE_URL}`);
+    console.error(`Self-hosted Sentry MCP server v${SERVER_VERSION} running for org "${ORG_SLUG}" at ${BASE_URL}${READ_ONLY ? ' (read-only)' : ''}`);
   }
 }
 
@@ -244,23 +259,58 @@ export class SelfHostedSentryServer {
 // Raw API Handler
 // ============================================================
 
+// Same shape axios uses to decide a URL is absolute; such a URL bypasses baseURL
+// while still carrying the Authorization header, so it must never reach the client.
+const ABSOLUTE_URL_PATTERN = /^([a-z][a-z\d+\-.]*:)?\/\//i;
+const RAW_API_BASE_URL = new URL(`${BASE_URL}/api/0/`);
+const CONTROL_CHARACTER_PATTERN = /[\u0000-\u001f\u007f]/;
+
+function normalizeEndpoint(endpoint: string): string {
+  const trimmed = endpoint.trim();
+  const relative = trimmed.replace(/^\/(?!\/)/, '');
+
+  let resolved: URL;
+  try {
+    resolved = new URL(relative, RAW_API_BASE_URL);
+  } catch {
+    throw new McpError(ErrorCode.InvalidParams, 'endpoint must be a valid relative Sentry API path.');
+  }
+
+  if (
+    !relative ||
+    CONTROL_CHARACTER_PATTERN.test(trimmed) ||
+    trimmed.includes('\\') ||
+    ABSOLUTE_URL_PATTERN.test(trimmed) ||
+    resolved.origin !== RAW_API_BASE_URL.origin ||
+    !resolved.pathname.startsWith(RAW_API_BASE_URL.pathname)
+  ) {
+    throw new McpError(ErrorCode.InvalidParams, 'endpoint must remain within the configured Sentry /api/0/ path.');
+  }
+
+  return relative;
+}
+
 async function handleRawApi(args: unknown) {
   if (!isValidRawApiArgs(args)) {
     throw new McpError(ErrorCode.InvalidParams, 'Invalid args for raw_sentry_api.');
   }
 
+  const endpoint = normalizeEndpoint(args.endpoint);
   const method = (args.method || 'GET').toUpperCase();
-  console.error(`Raw API ${method} request to ${args.endpoint}`);
+
+  if (READ_ONLY && method !== 'GET') {
+    throw new McpError(ErrorCode.InvalidRequest, `raw_sentry_api ${method} is disabled: server is running in read-only mode (SENTRY_READ_ONLY).`);
+  }
+
+  console.error(`Raw API ${method} request to ${endpoint}`);
 
   let response;
-  const config: Record<string, unknown> = {};
-  if (args.params) config.params = args.params;
 
   switch (method) {
-    case 'GET': response = await sentryClient.get(args.endpoint, args.params); break;
-    case 'POST': response = await sentryClient.post(args.endpoint, args.body || {}, args.params); break;
-    case 'PUT': response = await sentryClient.put(args.endpoint, args.body || {}); break;
-    case 'DELETE': response = await sentryClient.delete(args.endpoint); break;
+    case 'GET': response = await sentryClient.get(endpoint, args.params); break;
+    case 'POST': response = await sentryClient.post(endpoint, args.body || {}, args.params); break;
+    case 'PUT': response = await sentryClient.put(endpoint, args.body || {}); break;
+    case 'DELETE': response = await sentryClient.delete(endpoint); break;
     default:
       throw new McpError(ErrorCode.InvalidParams, `Unsupported HTTP method: ${method}`);
   }
@@ -294,6 +344,6 @@ async function handleRawApi(args: unknown) {
 
 const server = new SelfHostedSentryServer();
 server.run().catch((error) => {
-  console.error('Failed to start server:', error);
+  console.error('Failed to start server:', error instanceof Error ? error.message : String(error));
   process.exit(1);
 });
