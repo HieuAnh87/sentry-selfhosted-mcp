@@ -227,7 +227,7 @@ If a response comes back truncated, narrow it rather than asking for more — pa
 
 24 tools across 6 categories. Parameters are **required** unless marked *optional*.
 
-**WRITE** marks the five tools that can modify Sentry. Under `SENTRY_READ_ONLY=true` the four dedicated write tools are refused outright, while `raw_sentry_api` stays available with `GET` only — see [Configuration](#what-sentry_read_onlytrue-blocks).
+**WRITE** marks the five tools that can modify Sentry. Under `SENTRY_READ_ONLY=true` the four dedicated write tools are hidden from the tool list and refused if called anyway, while `raw_sentry_api` stays available with `GET` only. Every tool also carries MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`), so clients can decide which calls need confirmation — see [Configuration](#what-sentry_read_onlytrue-blocks).
 
 **Issue IDs.** Every `issue_id` parameter accepts either a numeric ID (`5217`) or a short ID as shown in the Sentry UI (`PROJ-1A2`). `get_sentry_issue` also accepts a full issue URL.
 
@@ -247,8 +247,8 @@ Call the same tool again with `cursor` set to `next_cursor` to get the next page
 | --- | --- | --- |
 | `get_sentry_issue` | Issue details by numeric ID, short ID or URL | `issue_id_or_url`; *optional* `include_latest_event` (default `false`), `include_fields[]`, `exclude_fields[]`, `grep_pattern`, `max_stack_frames` — see [FILTERING.md](FILTERING.md) |
 | `list_sentry_projects` | All projects in the org | *optional* `cursor` |
-| `list_sentry_issues` | Issues in one project | `project_slug`; *optional* `query`, `status` (`resolved`/`unresolved`/`ignored`), `limit` (1–100, default 25), `cursor` |
-| `list_issues` | Org-wide issue search, Sentry query syntax | *optional* `query`, `sort` (`date`/`priority`/`freq`/`user`, default `date`), `limit` (1–100, default 25), `cursor` |
+| `list_sentry_issues` | Issues in one project, as compact triage fields (id, shortId, title, level, status, counts, first/last seen, project, assignee, error type/value) | `project_slug`; *optional* `query`, `status` (`resolved`/`unresolved`/`ignored`), `limit` (1–100, default 25), `cursor`, `full` (Sentry's full issue objects with stats) |
+| `list_issues` | Org-wide issue search, Sentry query syntax; compact fields like `list_sentry_issues` | *optional* `query`, `sort` (`date`/`priority`/`freq`/`user`, default `date`), `limit` (1–100, default 25), `cursor`, `full` |
 | `get_issue_hashes` | Fingerprint hashes for an issue | `issue_id`; *optional* `cursor` |
 | `update_sentry_issue_status` **WRITE** | Set issue status | `issue_id`, `status` (`resolved`/`ignored`/`unresolved`) |
 | `create_sentry_issue_comment` **WRITE** | Add a comment | `issue_id`, `comment_text` |
@@ -444,7 +444,7 @@ It targets self-hosted Sentry, but works against Sentry SaaS when the token and 
 For endpoints the typed tools do not cover. It returns unfiltered JSON, so pass `grep_pattern` on anything event-shaped — above 50,000 tokens it refuses outright without one.
 
 **Can I stop the agent from modifying Sentry?**
-Set `SENTRY_READ_ONLY=true` (requires a source or Docker build until 1.2.0 is on npm — see the [version note](#3-install)). That refuses the four mutating tools and restricts `raw_sentry_api` to `GET`. For a stronger guarantee, issue a token without `event:write` — the env var stops an agent from calling the tool, the scope stops the credential from being usable at all.
+Set `SENTRY_READ_ONLY=true` (requires a source or Docker build until 1.2.0 is on npm — see the [version note](#3-install)). That hides and refuses the four mutating tools and restricts `raw_sentry_api` to `GET`. For a stronger guarantee, issue a token without `event:write` — the env var stops an agent from calling the tool, the scope stops the credential from being usable at all.
 
 **Does it work with Sentry's newer API versions?**
 Yes, for the versions in use today. Sentry has shipped only one public web API version — `/api/0/` — and every endpoint here is composed against it in `src/api/client.ts`. If Sentry ever publishes a `/api/1/`, this server would need updating.

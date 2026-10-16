@@ -34,12 +34,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   against a stand-in Sentry API, and a GitHub Actions workflow running build and tests on Node 20
   and 22.
 
+- MCP tool annotations on every tool: `title`, `readOnlyHint`, `destructiveHint`, `idempotentHint`
+  and `openWorldHint`. Read tools state `destructiveHint: false` explicitly, because the spec
+  defaults it to `true`; `bulk_update_issues`, `merge_issues` and `raw_sentry_api` are marked
+  destructive. Under `SENTRY_READ_ONLY`, `raw_sentry_api` is annotated read-only.
+- `full` input on `list_sentry_issues` and `list_issues` to return Sentry's full issue objects.
+
 ### Changed
 
 Tool names are unchanged and input schemas only gained optional properties, but many tools now
 return smaller or differently shaped output. Clients that parse responses programmatically should
 check the following.
 
+- **Smaller responses.** Measured against a live self-hosted instance (characters per response):
+  `list_issues` with 5 issues 16,171 → 2,774; `get_sentry_event_details` 27,409 → 8,378;
+  `get_sentry_issue` with its latest event 15,075 → 4,879; `list_breadcrumbs` 6,163 → 1,975.
+  - Tool results are compact JSON instead of 2-space indented JSON (indentation was about 40% of
+    every response).
+  - `list_sentry_issues` and `list_issues` return compact triage fields per issue (id, shortId,
+    title, culprit, level, status, priority, counts, first/last seen, project id/slug, assignee
+    name, error type/value/location, permalink) and ask Sentry not to compute stats series. Pass
+    `full: true` for the previous output.
+  - Breadcrumbs drop underscore-prefixed `data` keys (logging integrations put the whole log
+    record there, e.g. structlog's `_record`), strip ANSI colour codes, and clip messages to 500
+    and data values to 200 characters.
+  - `get_sentry_event_details` drops `_meta` and `sdkUpdates`, reduces the embedded `release` to
+    its version and dates, and `groupingConfig` to its id.
+- **`SENTRY_READ_ONLY` hides the mutating tools** from `tools/list` (20 tools are listed) in
+  addition to refusing calls to them.
 - **Pagination.** List tools that accept `cursor` now return, when another page exists, a second
   text content block `{"next_cursor", "has_more", "hint"}`. The first block keeps its shape.
   `list_sentry_projects` gains an optional `cursor` input.
@@ -113,6 +135,8 @@ check the following.
   were computed from the returned page only.
 - List endpoints that page with `per_page` (events, releases, tag values) ignored `limit`; both
   are now sent.
+- The server declared `resources: { list: true }`, which is not a valid MCP capability; it now
+  declares `resources: {}`.
 - **A proxy error page lost its HTTP status.** When Sentry or a reverse proxy answered with a
   non-JSON body (e.g. `504 upstream request timeout`), axios' strict JSON parsing discarded the
   response and the tool reported only `Unexpected token ...`. Bodies are now parsed by the client,
