@@ -40,6 +40,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   destructive. Under `SENTRY_READ_ONLY`, `raw_sentry_api` is annotated read-only.
 - `full` input on `list_sentry_issues` and `list_issues` to return Sentry's full issue objects.
 
+### Dependencies
+
+- `@modelcontextprotocol/sdk` 0.6.0 → 1.32.1. The server now negotiates MCP protocol versions up
+  to `2025-11-25` (previously only `2024-11-05`), which is what makes tool annotations reach
+  clients. Clients that speak only the `2026-07-28` revision (no `initialize` handshake) are not
+  supported yet; that needs the v2 SDK.
+- `axios` raised to `^1.20.0`; together with `npm audit fix` this clears advisories in `axios`,
+  `follow-redirects` (auth header leak on cross-domain redirects) and `form-data`.
+
 ### Changed
 
 Tool names are unchanged and input schemas only gained optional properties, but many tools now

@@ -39,12 +39,12 @@
     "test:smoke": "node test/smoke.test.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "0.6.0",
-    "axios": "^1.8.4"
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "axios": "^1.20.0"
   },
   "devDependencies": {
-    "nock": "^14.0.10",
     "@types/node": "^20.11.24",
+    "nock": "^14.0.10",
     "typescript": "^5.3.3"
   }
 }
