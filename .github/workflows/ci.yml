@@ -103,6 +103,6 @@ jobs:
             const { readFileSync } = require("node:fs");
             const response = JSON.parse(readFileSync("/tmp/tools-list.json", "utf8"));
             const count = response.result.tools.length;
-            if (count !== 24) throw new Error(`expected 24 tools from the installed bin, got ${count}`);
+            if (count !== 28) throw new Error(`expected 28 tools from the installed bin, got ${count}`);
             console.log(`installed bin served ${count} tools`);
           '
