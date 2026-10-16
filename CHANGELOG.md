@@ -5,11 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-> **Version note.** `v1.1.3` is tagged in git but was never published to npm, where the latest
-> release is `1.1.2`. Everything below `[Unreleased]` therefore covers work that exists in the
-> repository but has not shipped to npm users. The version in `package.json` may run ahead of both.
+> **Version note.** `v1.1.3` was tagged in git but never published to npm. `1.2.0` is the first
+> npm release after `1.1.2` and includes everything from `1.1.3`.
 
 ## [Unreleased]
+
+## [1.2.0] - 2026-10-16
+
+**Security release — upgrade from any earlier version.** In every version before 1.2.0,
+`raw_sentry_api` passed its `endpoint` argument straight to the HTTP client. An absolute URL made
+the client ignore the configured Sentry URL while still sending the `Authorization: Bearer` header,
+so a single tool call could send the Sentry auth token to any host, or reach hosts on the server's
+internal network. Because an agent can be steered by text inside Sentry events — and anyone with a
+project's public DSN can submit events — this did not require access to the Sentry instance. If you
+ran an earlier version with an agent that reads Sentry data, rotate the token. All earlier versions
+are deprecated on npm.
 
 ### Added
 
@@ -232,9 +242,10 @@ check the following.
 
 - Every value interpolated into a Sentry API path is now percent-encoded, so an argument such as
   `../other-org` can no longer rewrite the request path.
-- `raw_sentry_api` rejects endpoints that are absolute URLs, contain backslashes or control
-  characters, or resolve outside the configured `/api/0/` path. Each of these could previously send
-  the `Authorization` header to an arbitrary host or path.
+- **`raw_sentry_api` could send the auth token to any host** (see the note at the top of this
+  release). It now rejects endpoints that are absolute or protocol-relative URLs, contain
+  backslashes or control characters, or resolve outside the configured `/api/0/` path; the HTTP
+  client additionally refuses absolute URLs and does not follow redirects.
 - The HTTP client refuses absolute URLs, does not follow redirects, and treats non-JSON responses
   (SSO or proxy HTML pages) as errors instead of returning them as data.
 - Error logging prints messages only. Logging the full axios error object wrote the request
@@ -292,7 +303,8 @@ First tagged release. Earlier commits (from 2026-01-05) were not tagged and are 
 
 - Organization slug inference, which was buggy. `SENTRY_ORG_SLUG` is now required.
 
-[Unreleased]: https://github.com/HieuAnh87/sentry-selfhosted-mcp/compare/v1.1.3...HEAD
+[Unreleased]: https://github.com/HieuAnh87/sentry-selfhosted-mcp/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/HieuAnh87/sentry-selfhosted-mcp/compare/v1.1.3...v1.2.0
 [1.1.3]: https://github.com/HieuAnh87/sentry-selfhosted-mcp/compare/v1.1.2...v1.1.3
 [1.1.2]: https://github.com/HieuAnh87/sentry-selfhosted-mcp/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/HieuAnh87/sentry-selfhosted-mcp/compare/v1.1.0...v1.1.1

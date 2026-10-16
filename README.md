@@ -36,7 +36,7 @@ Which scope each tool needs: [Token scopes](#token-scopes).
 
 ### 3. Install
 
-> **Version note — read before using `npx` or `npm install -g`.** The current npm release (`latest`, 1.1.2) predates this README. It ships 12 of the 28 tools and has no `SENTRY_READ_ONLY`: it silently ignores the variable and leaves its write tools — including `raw_sentry_api` with `POST`/`PUT`/`DELETE` — enabled. Until 1.2.0 is published, build from source (below, then use [Option 3](#client-configuration) in your client config) or use [Docker](#docker) to get read-only mode and the full tool set. Check what you have with `npm view selfhosted-sentry-mcp version`.
+> **Use 1.2.0 or later.** Every earlier version is deprecated: its `raw_sentry_api` accepted absolute URLs and sent your Sentry auth token to them, and it has no `SENTRY_READ_ONLY`. If you ran an earlier version with an agent that reads Sentry data, rotate the token. `npx -y selfhosted-sentry-mcp` fetches the latest release; a globally installed copy needs `npm install -g selfhosted-sentry-mcp@latest`. Check what you have with `npm ls -g selfhosted-sentry-mcp`.
 
 **Nothing to install.** The recommended setup runs the published package through `npx` straight from your MCP client config — skip to [Client configuration](#client-configuration).
 
@@ -66,7 +66,7 @@ npm run build
 | `SENTRY_URL` | yes | — | Base URL of your Sentry instance, e.g. `https://sentry.example.com`. Must be a valid URL; a trailing slash is stripped. |
 | `SENTRY_AUTH_TOKEN` | yes | — | Sentry API token. See [Token scopes](#token-scopes) below. |
 | `SENTRY_ORG_SLUG` | yes | — | Organization slug, e.g. `my-org`. |
-| `SENTRY_READ_ONLY` | no | `false` | Set to `true` (or `1`) to block writes. **Off by default** for backward compatibility, so write tools are exposed unless you opt in. See below for exactly what it blocks. Not supported by npm release 1.1.2 — see the [version note](#3-install). |
+| `SENTRY_READ_ONLY` | no | `false` | Set to `true` (or `1`) to block writes. **Off by default** for backward compatibility, so write tools are exposed unless you opt in. See below for exactly what it blocks. Requires 1.2.0 or later — see the [version note](#3-install). |
 
 The server validates the three required variables at startup and exits immediately if any is missing or if `SENTRY_URL` is not a valid URL.
 
@@ -133,7 +133,7 @@ Where the config file goes:
 
 For Claude Code's `.mcp.json` you may also add `"type": "stdio"` alongside `command`.
 
-> Until 1.2.0 is on npm, `npx` and `npm install -g` fetch 1.1.2, where `"SENTRY_READ_ONLY": "true"` has **no effect** — see the [version note](#3-install). Use Option 3 or [Docker](#docker) if you need read-only mode today.
+> `SENTRY_READ_ONLY` needs 1.2.0 or later; earlier versions ignore it silently — see the [version note](#3-install).
 
 To register it at user scope instead, without writing a config file by hand:
 
@@ -196,7 +196,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | \
   npx -y selfhosted-sentry-mcp
 ```
 
-You should see a JSON response listing 28 tools, plus a startup line on stderr naming your org slug and Sentry URL. (With npm release 1.1.2 you will see 12 tools — see the [version note](#3-install). For a source build, replace `npx -y selfhosted-sentry-mcp` with `node build/index.js`.)
+You should see a JSON response listing 28 tools, plus a startup line on stderr naming your org slug and Sentry URL. (Fewer than 28 means an outdated version — see the [version note](#3-install). For a source build, replace `npx -y selfhosted-sentry-mcp` with `node build/index.js`.)
 
 ```
 Self-hosted Sentry MCP server v… running for org "your-org-slug" at https://your-sentry-instance.com
@@ -458,7 +458,7 @@ It targets self-hosted Sentry, but works against Sentry SaaS when the token and 
 For endpoints the typed tools do not cover. It returns unfiltered JSON, so pass `grep_pattern` on anything event-shaped — above 50,000 tokens it refuses outright without one.
 
 **Can I stop the agent from modifying Sentry?**
-Set `SENTRY_READ_ONLY=true` (requires a source or Docker build until 1.2.0 is on npm — see the [version note](#3-install)). That hides and refuses the four mutating tools and restricts `raw_sentry_api` to `GET`. For a stronger guarantee, issue a token without `event:write` — the env var stops an agent from calling the tool, the scope stops the credential from being usable at all.
+Set `SENTRY_READ_ONLY=true` (requires 1.2.0 or later — see the [version note](#3-install)). That hides and refuses the four mutating tools and restricts `raw_sentry_api` to `GET`. For a stronger guarantee, issue a token without `event:write` — the env var stops an agent from calling the tool, the scope stops the credential from being usable at all.
 
 **Does it work with Sentry's newer API versions?**
 Yes, for the versions in use today. Sentry has shipped only one public web API version — `/api/0/` — and every endpoint here is composed against it in `src/api/client.ts`. If Sentry ever publishes a `/api/1/`, this server would need updating.

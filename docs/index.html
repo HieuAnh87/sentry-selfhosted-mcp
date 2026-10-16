@@ -965,7 +965,7 @@
             </div>
           </div>
         </div>
-        <p class="version-note"><strong>Version note:</strong> npm <code>latest</code> is still 1.1.2, which has 12 of the 28 tools and silently ignores <code>SENTRY_READ_ONLY</code>. Until 1.2.0 is published, use a <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp#3-install" target="_blank" rel="noopener">source build</a> or the <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp#docker" target="_blank" rel="noopener">Docker image</a> for read-only mode and the full tool set.</p>
+        <p class="version-note"><strong>Use 1.2.0 or later.</strong> Earlier versions are deprecated: they can send your Sentry token to arbitrary hosts through <code>raw_sentry_api</code> and ignore <code>SENTRY_READ_ONLY</code>. If you ran one with an agent, rotate the token. See the <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp/blob/main/CHANGELOG.md" target="_blank" rel="noopener">changelog</a>.</p>
       </div>
       <div class="code-block">
         <div class="code-tabs" role="tablist" aria-label="MCP client configuration examples">
@@ -1051,7 +1051,7 @@
         </div>
         <div class="code-footer">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
-          The npm package is <strong>selfhosted-sentry-mcp</strong>. This file holds a live Sentry token — keep it out of version control. Read-only mode needs 1.2.0 or a source build.
+          The npm package is <strong>selfhosted-sentry-mcp</strong>. This file holds a live Sentry token — keep it out of version control. Read-only mode needs 1.2.0 or later.
         </div>
       </div>
     </div>
@@ -1210,7 +1210,7 @@
     <div class="container">
       <div class="cta-left">
         <h2>Supercharge your Sentry workflow with AI.</h2>
-        <p>Install <strong>selfhosted-sentry-mcp</strong> from npm, or build from source for read-only mode until 1.2.0 ships, and point it at your Sentry instance.</p>
+        <p>Install <strong>selfhosted-sentry-mcp</strong> from npm and point it at your Sentry instance.</p>
       </div>
       <div class="cta-right">
         <div class="cta-card">

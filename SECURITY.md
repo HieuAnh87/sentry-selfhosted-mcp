@@ -57,7 +57,9 @@ Setting `SENTRY_READ_ONLY` to `true` or `1` blocks writes:
 
 **It is opt-in and defaults to `false`**, for backward compatibility with existing installs. If you do nothing, the write tools are exposed.
 
-**It is not in npm release 1.1.2**, the current `latest`. That version ignores `SENTRY_READ_ONLY` without warning, so a config that sets it still runs with every write path open — including `raw_sentry_api` with `POST`, `PUT` and `DELETE`. Until 1.2.0 is published, build from source or use the Docker image (see the README), and rely on the token's scopes in any case.
+**It requires 1.2.0 or later.** Earlier versions ignore `SENTRY_READ_ONLY` without warning, so a config that sets it still runs with every write path open — including `raw_sentry_api` with `POST`, `PUT` and `DELETE`. Rely on the token's scopes in any case.
+
+**Versions before 1.2.0 can leak the auth token.** Their `raw_sentry_api` accepted an absolute URL as `endpoint` and sent the request — with the `Authorization: Bearer` header — to that host. A prompt injected through Sentry event data (anyone with a project's public DSN can submit events) could therefore exfiltrate the token or reach hosts on the server's internal network. These versions are deprecated on npm. Upgrade, and rotate any token used with them by an agent that reads Sentry data.
 
 ```json
 "env": {
