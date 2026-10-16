@@ -27,6 +27,24 @@ export interface SentryIssue {
   [key: string]: unknown;
 }
 
+/** A list response plus Sentry's cursor pagination state. */
+export interface Paged<T> {
+  data: T;
+  nextCursor?: string;
+  hasMore: boolean;
+}
+
+/**
+ * Entry of `GET /issues/{id}/hashes/`.
+ * Sentry's hash serializer returns objects (id + embedded latest event),
+ * not bare hash strings.
+ */
+export interface SentryIssueHash {
+  id: string;
+  latestEvent?: SentryEvent;
+  [key: string]: unknown;
+}
+
 export interface SentryEvent {
   id: string;
   eventID?: string;
@@ -134,34 +152,29 @@ export interface SentryActivity {
   issue?: string;
 }
 
-export interface SentryTrace {
-  traceId: string;
-  spans?: SentrySpan[];
-  duration?: number;
-  startTimestamp?: number;
-  endTimestamp?: number;
-  [key: string]: unknown;
-}
-
-export interface SentrySpan {
-  spanId: string;
-  traceId?: string;
-  parentSpanId?: string;
-  op?: string;
-  description?: string;
-  startTimestamp?: number;
-  timestamp?: number;
-  tags?: Record<string, string>;
-  status?: string;
-  data?: Record<string, unknown>;
-  exclusiveTime?: number;
-  [key: string]: unknown;
-}
-
-export interface SentryGroupingConfig {
+/** Serialized EventAttachment (`.../attachments/`). */
+export interface SentryAttachment {
   id: string;
+  event_id: string;
+  type: string;
   name: string;
-  enhancements?: string;
+  mimetype?: string;
+  size: number;
+  dateCreated: string;
+  headers?: Record<string, string>;
+  [key: string]: unknown;
+}
+
+/** Serialized UserReport (`user-reports/`), the user feedback attached to an event. */
+export interface SentryUserReport {
+  id: string;
+  eventID: string;
+  name?: string;
+  email?: string;
+  comments: string;
+  dateCreated: string;
+  issue?: Record<string, unknown> | null;
+  [key: string]: unknown;
 }
 
 export interface SentryProject {
@@ -179,9 +192,19 @@ export interface SentryProject {
 // MCP Tool Types
 // ============================================================
 
+/** MCP tool annotations: hints for clients deciding whether to confirm a call. */
+export interface ToolAnnotations {
+  title?: string;
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+}
+
 export interface ToolDefinition {
   name: string;
   description: string;
+  annotations?: ToolAnnotations;
   inputSchema: {
     type: 'object';
     properties: Record<string, unknown>;

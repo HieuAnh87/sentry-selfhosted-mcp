@@ -2,11 +2,15 @@
 
 import { sentryClient } from '../api/client.js';
 import { ORG_SLUG } from '../config.js';
-import { truncateResponse, truncateStackTraces } from '../helpers/truncate.js';
-import { filterObjectFields } from '../helpers/filter.js';
-import { extractEssentialEventEntry, extractBreadcrumbs } from '../helpers/extract.js';
-import { grepFilter } from '../helpers/grep.js';
-import type { ToolDefinition, ToolResult } from '../api/types.js';
+import {
+  extractEssentialEventEntry,
+  extractBreadcrumbTrail,
+  compactContexts,
+  isInAppFrame,
+  selectRelevantThread,
+} from '../helpers/extract.js';
+import { truncatedTextResult } from './issues.js';
+import type { SentryEventEntry, ToolDefinition, ToolResult } from '../api/types.js';
 import type { SentryEvent } from '../api/client.js';
 import {
   isValidGetEventArgs,
@@ -58,7 +62,7 @@ export const list_issue_events_tool: ToolDefinition = {
   inputSchema: {
     type: 'object',
     properties: {
-      issue_id: { type: 'string', description: 'The ID of the issue.' },
+      issue_id: { type: 'string', description: 'Numeric issue ID or short ID (e.g. PROJ-1A2).' },
       limit: { type: 'number', description: 'Max events (1-100, default: 25).', minimum: 1, maximum: 100 },
       cursor: { type: 'string', description: 'Pagination cursor.' },
       full: { type: 'boolean', description: 'Include full event details (default: false).', default: false },
@@ -136,6 +140,66 @@ export const list_breadcrumbs_tool: ToolDefinition = {
 };
 
 // ============================================================
+// Helpers
+// ============================================================
+
+type Rec = Record<string, unknown>;
+
+const isRecord = (value: unknown): value is Rec =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+// Entry types shown first when no entry_type is requested
+const PRIORITY_ENTRY_TYPES = ['exception', 'message', 'breadcrumbs', 'request'];
+
+/** Priority entry types first (in priority order), then the rest in event order. */
+function prioritizeEntries<T extends { type: string }>(entries: T[]): T[] {
+  const rank = (type: string) => {
+    const index = PRIORITY_ENTRY_TYPES.indexOf(type);
+    return index === -1 ? PRIORITY_ENTRY_TYPES.length : index;
+  };
+  return entries
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => rank(a.entry.type) - rank(b.entry.type) || a.index - b.index)
+    .map(({ entry }) => entry);
+}
+
+/**
+ * Event tags as `{key, value}`. Sentry's event serializers return
+ * `[{key, value}]`; raw event JSON uses `[key, value]` pairs. Accepts both.
+ */
+function compactTags(tags: unknown, max = 5): { key: unknown; value: unknown }[] | undefined {
+  if (!Array.isArray(tags)) return undefined;
+  return tags.slice(0, max).map(tag => {
+    if (Array.isArray(tag)) return { key: tag[0], value: tag[1] };
+    if (isRecord(tag)) return { key: tag.key, value: tag.value };
+    return { key: tag, value: undefined };
+  });
+}
+
+/**
+ * Query params for a Sentry list endpoint. Sentry pages with `per_page`
+ * (`limit` is ignored by these endpoints but kept for compatibility).
+ */
+function listParams(limit: number | undefined, cursor: string | undefined): Record<string, string | number | boolean> {
+  const pageSize = limit ?? 25;
+  const params: Record<string, string | number | boolean> = { limit: pageSize, per_page: pageSize };
+  if (cursor) params.cursor = cursor;
+  return params;
+}
+
+function compactEventSummary(event: SentryEvent): Record<string, unknown> {
+  return {
+    id: event.id,
+    eventID: event.eventID,
+    dateCreated: event.dateCreated,
+    message: event.message || event.title,
+    platform: event.platform,
+    tags: compactTags(event.tags),
+    user: event.user ? { id: event.user.id, email: event.user.email } : null,
+  };
+}
+
+// ============================================================
 // Tool Handlers
 // ============================================================
 
@@ -146,73 +210,82 @@ export async function handleGetSentryEventDetails(args: unknown): Promise<ToolRe
 
   console.error(`Fetching event ${args.event_id} for project ${args.project_slug}`);
   const eventData = await sentryClient.getEvent(ORG_SLUG, args.project_slug, args.event_id);
+  const output: Rec = { ...eventData };
 
-  const offset = args.offset || 0;
-  const limit = args.limit || 5;
+  const offset = args.offset ?? 0;
+  const limit = args.limit ?? 5;
 
-  if (eventData.entries && Array.isArray(eventData.entries)) {
-    const totalEntries = eventData.entries.length;
-    let selectedEntries: SentryEvent['entries'] = [];
+  if (Array.isArray(eventData.entries)) {
+    const entries = eventData.entries;
+    const totalEntries = entries.length;
+    const availableTypes = [...new Set(entries.map((e) => e.type))];
 
-    if (args.entry_type) {
-      selectedEntries = eventData.entries
-        .filter((e) => e.type === args.entry_type)
-        .slice(offset, offset + limit);
-
-      if (selectedEntries.length === 0) {
-        eventData.entries = [];
-        eventData.entriesError = `No entries of type '${args.entry_type}' found. Available types: ${[...new Set(eventData.entries.map((e) => e.type))].join(', ')}`;
-      }
+    if (args.entry_type === 'contexts') {
+      // Contexts (os, browser, runtime, trace, ...) are a top-level event field, not an entry.
+      const contexts = compactContexts(eventData.contexts);
+      output.entries = [];
+      output.contexts = contexts;
+      if (Object.keys(contexts).length === 0) output.entriesError = 'This event has no contexts.';
+      output.pagination_info = {
+        total_entries: totalEntries,
+        showing: 0,
+        available_types: availableTypes,
+        tip: "Contexts are a top-level event field, returned under 'contexts' (scalar fields only).",
+      };
     } else {
-      const priorityTypes = ['exception', 'message', 'breadcrumbs', 'request'];
-      const importantEntries: SentryEvent['entries'] = [];
+      const ordered = args.entry_type
+        ? entries.filter((e) => e.type === args.entry_type)
+        : prioritizeEntries(entries);
+      const selected = ordered.slice(offset, offset + limit);
 
-      for (const type of priorityTypes) {
-        const entry = eventData.entries.find((e) => e.type === type);
-        if (entry && importantEntries.length < limit) {
-          importantEntries.push(entry);
-        }
+      if (args.entry_type && ordered.length === 0) {
+        output.entriesError = `No entries of type '${args.entry_type}' found. Available types: ${availableTypes.join(', ')}`;
+      } else if (selected.length === 0 && ordered.length > 0) {
+        output.entriesError = `offset ${offset} is past the last of ${ordered.length} matching entries.`;
       }
 
-      if (importantEntries.length < limit) {
-        const otherEntries = eventData.entries
-          .filter((e) => !priorityTypes.includes(e.type))
-          .slice(0, limit - importantEntries.length);
-        importantEntries.push(...otherEntries);
-      }
-
-      selectedEntries = importantEntries;
+      const extracted = selected.map(entry => extractEssentialEventEntry(entry));
+      const nextOffset = offset + selected.length;
+      output.entries = extracted;
+      output.pagination_info = {
+        total_entries: totalEntries,
+        matching_entries: ordered.length,
+        offset,
+        showing: extracted.length,
+        next_offset: selected.length > 0 && nextOffset < ordered.length ? nextOffset : undefined,
+        entry_types: extracted.map((e) => (e as Rec).type),
+        available_types: availableTypes,
+        tip: args.entry_type
+          ? `Showing only '${args.entry_type}' entries.`
+          : "Showing prioritized entries. Use entry_type='exception' to see only stack traces, or entry_type='contexts' for os/browser/runtime contexts.",
+      };
     }
-
-    const extractedEntries = selectedEntries.map(extractEssentialEventEntry);
-    eventData.entries = extractedEntries as SentryEvent['entries'];
-    (eventData as Record<string, unknown>).pagination_info = {
-      total_entries: totalEntries,
-      showing: extractedEntries.length,
-      entry_types: extractedEntries.map((e) => (e as Record<string, unknown>).type),
-      available_types: [...new Set(selectedEntries.map((e) => e.type))],
-      tip: args.entry_type
-        ? `Showing only '${args.entry_type}' entries.`
-        : "Showing prioritized entries. Use entry_type='exception' to see only stack traces.",
-    };
   }
 
-  // Remove large fields
-  const fieldsToRemove = ['sdk', 'packages', 'contexts', 'user', 'request', 'environment'];
+  // Remove large fields (contexts stay, in compact form, only when requested).
+  // `_meta` is Sentry's scrubbing bookkeeping and `sdkUpdates` are integration
+  // suggestions: together ~1.5 KB per event and no use for debugging.
+  const fieldsToRemove = ['sdk', 'packages', 'user', 'request', 'environment', '_meta', 'sdkUpdates'];
+  if (args.entry_type !== 'contexts') fieldsToRemove.push('contexts');
   for (const field of fieldsToRemove) {
-    if ((eventData as Record<string, unknown>)[field]) {
-      (eventData as Record<string, unknown>)[`_${field}_removed`] = true;
-      delete (eventData as Record<string, unknown>)[field];
+    if (output[field]) {
+      output[`_${field.replace(/^_/, '')}_removed`] = true;
+      delete output[field];
     }
   }
 
-  const { data, truncated, pagination_info } = truncateResponse(eventData);
-  let resultText = JSON.stringify(data, null, 2);
-  if (truncated && pagination_info) {
-    resultText = `${pagination_info}\n\n${resultText}`;
+  // The embedded release carries authors, commits and deploys; get_release_details has those
+  const release = output.release;
+  if (release && typeof release === 'object') {
+    const r = release as Rec;
+    output.release = { version: r.version, shortVersion: r.shortVersion, dateCreated: r.dateCreated, dateReleased: r.dateReleased };
+  }
+  const groupingConfig = output.groupingConfig;
+  if (groupingConfig && typeof groupingConfig === 'object') {
+    output.groupingConfig = (groupingConfig as Rec).id;
   }
 
-  return { content: [{ type: 'text', text: resultText }] };
+  return truncatedTextResult(output);
 }
 
 export async function handleListIssueEvents(args: unknown): Promise<ToolResult> {
@@ -220,35 +293,18 @@ export async function handleListIssueEvents(args: unknown): Promise<ToolResult> 
     throw new McpError(ErrorCode.InvalidParams, 'Invalid args for list_issue_events.');
   }
 
-  const params: Record<string, string | number | boolean> = {};
-  if (args.limit) params.limit = args.limit;
-  if (args.cursor) params.cursor = args.cursor;
+  const params = listParams(args.limit, args.cursor);
   if (args.full) params.full = args.full;
-  if (!params.limit) params.limit = 25;
 
   console.error(`Listing events for issue ${args.issue_id}`);
-  const rawEvents = await sentryClient.listIssueEvents(args.issue_id, params);
+  const page = await sentryClient.listIssueEvents(args.issue_id, params);
+  const rawEvents = page.data;
 
-  let eventData: unknown = rawEvents;
-  if (!args.full && Array.isArray(rawEvents)) {
-    eventData = rawEvents.map((event: SentryEvent) => ({
-      id: event.id,
-      eventID: event.eventID,
-      dateCreated: event.dateCreated,
-      message: event.message || event.title,
-      platform: event.platform,
-      tags: (event.tags as [string, string][])?.slice(0, 5),
-      user: event.user ? { id: event.user.id, email: event.user.email } : null,
-    }));
-  }
+  const eventData: unknown = !args.full && Array.isArray(rawEvents)
+    ? rawEvents.map(compactEventSummary)
+    : rawEvents;
 
-  const { data, truncated, pagination_info } = truncateResponse(eventData);
-  let resultText = JSON.stringify(data, null, 2);
-  if (truncated && pagination_info) {
-    resultText = `${pagination_info}\n\n${resultText}`;
-  }
-
-  return { content: [{ type: 'text', text: resultText }] };
+  return truncatedTextResult(eventData, page);
 }
 
 export async function handleListErrorEvents(args: unknown): Promise<ToolResult> {
@@ -256,38 +312,65 @@ export async function handleListErrorEvents(args: unknown): Promise<ToolResult> 
     throw new McpError(ErrorCode.InvalidParams, 'Invalid args for list_error_events.');
   }
 
-  const params: Record<string, string | number | boolean> = {};
-  if (args.limit) params.limit = args.limit;
-  if (args.cursor) params.cursor = args.cursor;
+  const params = listParams(args.limit, args.cursor);
   if (args.query) params.query = args.query;
   if (args.full) params.full = args.full;
-  if (!params.limit) params.limit = 25;
 
   console.error(`Listing error events for project ${args.project_slug}`);
-  const rawEvents = await sentryClient.listProjectEvents(ORG_SLUG, args.project_slug, params);
+  const page = await sentryClient.listProjectEvents(ORG_SLUG, args.project_slug, params);
+  const rawEvents = page.data;
 
-  let eventData: unknown = rawEvents;
-  if (!args.full && Array.isArray(rawEvents)) {
-    eventData = rawEvents.map((event: SentryEvent) => ({
-      id: event.id,
-      eventID: event.eventID,
-      groupID: event.groupID,
-      dateCreated: event.dateCreated,
-      message: event.message || event.title,
-      platform: event.platform,
-      type: event.type,
-      tags: (event.tags as [string, string][])?.slice(0, 5),
-      user: event.user ? { id: event.user.id, email: event.user.email } : null,
-    }));
+  const eventData: unknown = !args.full && Array.isArray(rawEvents)
+    ? rawEvents.map((event: SentryEvent) => {
+        const { id, eventID, dateCreated, message, platform, tags, user } = compactEventSummary(event);
+        return { id, eventID, groupID: event.groupID, dateCreated, message, platform, type: event.type, tags, user };
+      })
+    : rawEvents;
+
+  return truncatedTextResult(eventData, page);
+}
+
+function exceptionValues(entries: SentryEventEntry[]): Rec[] {
+  const values: Rec[] = [];
+  for (const entry of entries) {
+    if (entry.type !== 'exception' || !isRecord(entry.data) || !Array.isArray(entry.data.values)) continue;
+    values.push(...entry.data.values.filter(isRecord));
   }
+  return values;
+}
 
-  const { data, truncated, pagination_info } = truncateResponse(eventData);
-  let resultText = JSON.stringify(data, null, 2);
-  if (truncated && pagination_info) {
-    resultText = `${pagination_info}\n\n${resultText}`;
-  }
+function framesOf(container: Rec | undefined): unknown[] {
+  const stacktrace = container?.stacktrace;
+  return isRecord(stacktrace) && Array.isArray(stacktrace.frames) ? stacktrace.frames : [];
+}
 
-  return { content: [{ type: 'text', text: resultText }] };
+/**
+ * Raw frames from the exception stack traces; if none carry one (common for
+ * native/Java crashes whose exception only references a thread), from the
+ * referenced or crashing thread instead.
+ */
+function collectRawFrames(entries: SentryEventEntry[]): { frames: unknown[]; note?: string } {
+  const exceptions = exceptionValues(entries);
+  const frames = exceptions.flatMap(exc => framesOf(exc));
+  if (frames.length > 0) return { frames };
+
+  const threadsEntry = entries.find((e) => e.type === 'threads');
+  const threadsData = threadsEntry?.data;
+  const threads = isRecord(threadsData) && Array.isArray(threadsData.values)
+    ? threadsData.values.filter(isRecord)
+    : [];
+  const threadId = exceptions.find(exc => exc.threadId !== undefined && exc.threadId !== null)?.threadId;
+  const thread = (threadId !== undefined ? threads.find(t => t.id === threadId) : undefined)
+    ?? selectRelevantThread(threads);
+  const threadFrames = framesOf(thread);
+  if (!thread || threadFrames.length === 0) return { frames: [] };
+
+  const label = thread.crashed === true ? 'crashed' : thread.current === true ? 'current' : 'first';
+  const name = thread.name ? `, "${String(thread.name)}"` : '';
+  return {
+    frames: threadFrames,
+    note: `No exception stack trace; frames are from the ${label} thread (id ${String(thread.id)}${name}).`,
+  };
 }
 
 export async function handleGetStackFrames(args: unknown): Promise<ToolResult> {
@@ -298,57 +381,39 @@ export async function handleGetStackFrames(args: unknown): Promise<ToolResult> {
   console.error(`Extracting stack frames from event ${args.event_id}`);
   const eventData = await sentryClient.getEvent(ORG_SLUG, args.project_slug, args.event_id);
 
+  const inAppOnly = args.in_app_only ?? false;
+  const { frames: rawFrames, note } = collectRawFrames(Array.isArray(eventData.entries) ? eventData.entries : []);
+
   const frames: Record<string, unknown>[] = [];
+  for (const f of rawFrames) {
+    const frame = isRecord(f) ? f : {};
+    const inApp = isInAppFrame(frame);
+    if (inAppOnly && !inApp) continue;
 
-  if (eventData.entries && Array.isArray(eventData.entries)) {
-    for (const entry of eventData.entries) {
-      if (entry.type === 'exception') {
-        const data = entry.data as Record<string, unknown> | undefined;
-        if (data?.values) {
-          const values = data.values as unknown[];
-          for (const exc of values) {
-            const excData = exc as Record<string, unknown>;
-            const stacktrace = excData.stacktrace as Record<string, unknown> | undefined;
-            if (stacktrace?.frames) {
-              const frameList = stacktrace.frames as unknown[];
-              for (const f of frameList) {
-                const frame = f as Record<string, unknown>;
-                if (args.in_app_only && !frame.in_app) continue;
-
-                frames.push({
-                  function: frame.function || frame.rawFunction || '<unknown>',
-                  filename: frame.filename || frame.absPath || null,
-                  line_no: frame.lineNo || null,
-                  col_no: frame.colNo || null,
-                  in_app: frame.in_app || false,
-                  module: frame.module || null,
-                  package: frame.package || null,
-                  instruction_addr: frame.instructionAddr || null,
-                  symbol_addr: frame.symbolAddr || null,
-                });
-              }
-            }
-          }
-        }
-      }
-    }
+    frames.push({
+      function: frame.function || frame.rawFunction || '<unknown>',
+      filename: frame.filename || frame.absPath || null,
+      line_no: frame.lineNo ?? null,
+      col_no: frame.colNo ?? null,
+      in_app: inApp,
+      module: frame.module ?? null,
+      package: frame.package ?? null,
+      instruction_addr: frame.instructionAddr ?? null,
+      symbol_addr: frame.symbolAddr ?? null,
+    });
   }
 
-  const maxFrames = args.max_frames || 50;
-  const limitedFrames = frames.slice(-maxFrames);
+  const maxFrames = args.max_frames ?? 50;
+  const limitedFrames = maxFrames > 0 ? frames.slice(-maxFrames) : [];
 
-  return {
-    content: [{
-      type: 'text',
-      text: JSON.stringify({
-        event_id: args.event_id,
-        total_frames: frames.length,
-        returned_frames: limitedFrames.length,
-        in_app_only: args.in_app_only || false,
-        frames: limitedFrames,
-      }, null, 2),
-    }],
-  };
+  return truncatedTextResult({
+    event_id: args.event_id,
+    total_frames: frames.length,
+    returned_frames: limitedFrames.length,
+    in_app_only: inAppOnly,
+    frames: limitedFrames,
+    _note: note,
+  });
 }
 
 export async function handleCheckDsymStatus(args: unknown): Promise<ToolResult> {
@@ -362,7 +427,7 @@ export async function handleCheckDsymStatus(args: unknown): Promise<ToolResult> 
   if (args.event_id) {
     eventData = await sentryClient.getEvent(ORG_SLUG, args.project_slug, args.event_id);
   } else {
-    const issuesResponse = await sentryClient.listProjectIssues(ORG_SLUG, args.project_slug, { limit: 1 });
+    const issuesResponse = (await sentryClient.listProjectIssues(ORG_SLUG, args.project_slug, { limit: 1 })).data;
 
     if (!issuesResponse || issuesResponse.length === 0) {
       return {
@@ -391,21 +456,16 @@ export async function handleCheckDsymStatus(args: unknown): Promise<ToolResult> 
 
   const hasMissingSymbols = missingDsyms.length > 0;
 
-  return {
-    content: [{
-      type: 'text',
-      text: JSON.stringify({
-        project: args.project_slug,
-        event_id: eventData.eventID || args.event_id,
-        has_missing_symbols: hasMissingSymbols,
-        missing_count: missingDsyms.length,
-        missing_symbols: missingDsyms,
-        recommendation: hasMissingSymbols
-          ? "Upload missing dSYM files to Sentry to see full function names. Use 'sentry-cli upload-dif' command."
-          : 'All debug symbols are present for this event.',
-      }, null, 2),
-    }],
-  };
+  return truncatedTextResult({
+    project: args.project_slug,
+    event_id: eventData.eventID || args.event_id,
+    has_missing_symbols: hasMissingSymbols,
+    missing_count: missingDsyms.length,
+    missing_symbols: missingDsyms,
+    recommendation: hasMissingSymbols
+      ? "Upload missing dSYM files to Sentry to see full function names. Use 'sentry-cli upload-dif' command."
+      : 'All debug symbols are present for this event.',
+  });
 }
 
 export async function handleListBreadcrumbs(args: unknown): Promise<ToolResult> {
@@ -416,19 +476,18 @@ export async function handleListBreadcrumbs(args: unknown): Promise<ToolResult> 
   console.error(`Extracting breadcrumbs from event ${args.event_id}`);
   const eventData = await sentryClient.getEvent(ORG_SLUG, args.project_slug, args.event_id);
 
-  const limit = args.limit || 50;
-  const breadcrumbs = extractBreadcrumbs(eventData, limit, args.type);
+  const limit = args.limit ?? 50;
+  const { total, breadcrumbs } = extractBreadcrumbTrail(eventData, limit, args.type);
 
-  return {
-    content: [{
-      type: 'text',
-      text: JSON.stringify({
-        event_id: args.event_id,
-        total_breadcrumbs: breadcrumbs.length,
-        returned_breadcrumbs: breadcrumbs.length,
-        type_filter: args.type || 'all',
-        breadcrumbs,
-      }, null, 2),
-    }],
-  };
+  return truncatedTextResult({
+    event_id: args.event_id,
+    total_breadcrumbs: total,
+    returned_breadcrumbs: breadcrumbs.length,
+    type_filter: args.type || 'all',
+    breadcrumbs,
+    _note: breadcrumbs.length < total
+      ? `Showing the ${breadcrumbs.length} most recent of ${total} breadcrumbs (oldest first).`
+      : undefined,
+  });
 }
+

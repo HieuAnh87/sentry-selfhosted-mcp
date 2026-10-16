@@ -2,10 +2,13 @@
 
 import { sentryClient } from '../api/client.js';
 import { ORG_SLUG } from '../config.js';
-import { truncateResponse } from '../helpers/truncate.js';
-import type { ToolDefinition, ToolResult } from '../api/types.js';
+import type { SentryRelease, ToolDefinition, ToolResult } from '../api/types.js';
 import { isValidListReleasesArgs, isValidGetReleaseArgs } from '../helpers/index.js';
+import { truncatedTextResult } from './issues.js';
 import { McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
+
+// Most recent buckets kept per stats series in the full view
+const MAX_STATS_BUCKETS = 24;
 
 // ============================================================
 // Tool Definitions
@@ -66,6 +69,50 @@ export const get_release_details_tool: ToolDefinition = {
 };
 
 // ============================================================
+// Utility Functions
+// ============================================================
+
+const trimReleaseStats = (release: SentryRelease): Record<string, unknown> => {
+  if (!release.stats) return release;
+
+  const stats: Record<string, unknown> = {};
+  let trimmed = false;
+
+  for (const [interval, series] of Object.entries(release.stats)) {
+    if (Array.isArray(series) && series.length > MAX_STATS_BUCKETS) {
+      stats[interval] = series.slice(-MAX_STATS_BUCKETS);
+      trimmed = true;
+    } else {
+      stats[interval] = series;
+    }
+  }
+
+  return {
+    ...release,
+    stats,
+    _stats_note: trimmed
+      ? `Stats series trimmed to the most recent ${MAX_STATS_BUCKETS} buckets per interval.`
+      : undefined,
+  };
+};
+
+/** One release in a list: identity, dates, new-issue count, and project slugs. */
+const compactRelease = (release: SentryRelease): Record<string, unknown> => ({
+  version: release.version,
+  shortVersion: release.shortVersion,
+  dateCreated: release.dateCreated,
+  dateReleased: release.dateReleased,
+  newGroups: release.newGroups,
+  projects: Array.isArray(release.projects)
+    ? release.projects.map(project =>
+        project !== null && typeof project === 'object' ? (project as Record<string, unknown>).slug : project
+      )
+    : undefined,
+  firstEvent: release.firstEvent,
+  lastEvent: release.lastEvent,
+});
+
+// ============================================================
 // Tool Handlers
 // ============================================================
 
@@ -74,23 +121,24 @@ export async function handleListReleases(args: unknown): Promise<ToolResult> {
     throw new McpError(ErrorCode.InvalidParams, 'Invalid args for list_releases.');
   }
 
-  const params: Record<string, string | number> = {};
+  // Sentry pages with `per_page`; `limit` is ignored there but kept for compatibility.
+  const limit = args.limit ?? 25;
+  const params: Record<string, string | number> = { limit, per_page: limit };
   if (args.query) params.query = args.query;
   if (args.date) params.date = args.date;
-  if (args.limit) params.limit = args.limit;
   if (args.cursor) params.cursor = args.cursor;
   if (args.sort) params.sort = args.sort;
 
   console.error(`Listing releases in org ${ORG_SLUG}`);
-  const response = await sentryClient.listReleases(ORG_SLUG, params);
+  const page = await sentryClient.listReleases(ORG_SLUG, params);
+  const raw: unknown = page.data;
+  const releases = (Array.isArray(raw) ? raw : []).map(compactRelease);
 
-  const { data, truncated, pagination_info } = truncateResponse(response);
-  let resultText = JSON.stringify(data, null, 2);
-  if (truncated && pagination_info) {
-    resultText = `${pagination_info}\n\n${resultText}`;
-  }
-
-  return { content: [{ type: 'text', text: resultText }] };
+  return truncatedTextResult({
+    returned_releases: releases.length,
+    releases,
+    _note: 'Compact view. Use get_release_details with a version for commits, deploys and stats.',
+  }, page);
 }
 
 export async function handleGetReleaseDetails(args: unknown): Promise<ToolResult> {
@@ -103,7 +151,7 @@ export async function handleGetReleaseDetails(args: unknown): Promise<ToolResult
 
   // Compact view by default, full view if requested
   const compactData = args.full
-    ? release
+    ? trimReleaseStats(release)
     : {
         version: release.version,
         dateReleased: release.dateReleased,
@@ -119,5 +167,5 @@ export async function handleGetReleaseDetails(args: unknown): Promise<ToolResult
         _note: 'Use full: true to include all fields including stats.',
       };
 
-  return { content: [{ type: 'text', text: JSON.stringify(compactData, null, 2) }] };
+  return truncatedTextResult(compactData);
 }

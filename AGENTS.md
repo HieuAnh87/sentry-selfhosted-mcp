@@ -27,7 +27,7 @@ npm run test:smoke
 node --test test/tools.test.js
 
 # Docker image build
-docker build -t sentry-selfhosted-mcp:latest .
+docker build -t selfhosted-sentry-mcp:latest .   # not sentry-selfhosted-mcp: that name is an unrelated npm package
 ```
 
 ## Boundaries
@@ -43,15 +43,18 @@ docker build -t sentry-selfhosted-mcp:latest .
 |------|----------|------|
 | Tool routing/registry | `src/server.ts` | `TOOLS` array + `CallToolRequestSchema` switch must stay in sync |
 | Env validation/startup behavior | `src/config.ts` | validation runs on module load; missing env throws immediately |
-| Sentry HTTP endpoints | `src/api/client.ts` | all endpoint path composition centralized here |
+| Sentry HTTP endpoints | `src/api/client.ts` | all endpoint path composition centralized here; list methods return `{data, nextCursor, hasMore}` (parsed from Sentry's `Link` header), not a bare array |
 | Output filtering/truncation logic | `src/helpers/{filter,truncate,grep}.ts` | use helpers before returning large JSON |
-| Tool contract expectations | `test/tools.test.js` | expected tool list currently fixed at 24 |
+| Tool contract expectations | `test/tools.test.js` | expected tool list currently fixed at 28 |
+| Pagination | `src/helpers/pagination.ts`, `truncatedTextResult` in `src/tools/issues.ts` | when more results exist, a tool result carries a second text content block `{next_cursor, has_more, hint}`; `content[0]` keeps its shape |
 
 ## Conventions (deviations only)
 
 - ESM imports use explicit `.js` extension in TS source (Node16 module resolution).
 - Entry point is intentionally thin: `src/index.ts` only imports `./server.js` for compatibility.
 - Raw API tool warns on large event payloads and supports `grep_pattern`; preserve this behavior.
+- Tool results may have more than one content block: the main payload first, then an optional pagination block. Don't assume `content.length === 1`, and don't fold the cursor into `content[0]`.
+- Bulk issue mutations must carry an `id` or `query` selection in the URL; `selectorParams` in `src/api/client.ts` refuses an empty one. Never bypass it — Sentry applies an unselected bulk update to every unresolved issue in the project.
 
 ## Anti-patterns (project-specific)
 
