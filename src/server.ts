@@ -74,7 +74,7 @@ import { isValidRawApiArgs } from './helpers/index.js';
 import { grepFilter } from './helpers/grep.js';
 import { sentryClient } from './api/client.js';
 import { ORG_SLUG, BASE_URL, READ_ONLY } from './config.js';
-import type { ToolDefinition } from './api/types.js';
+import type { ToolDefinition, ToolAnnotations } from './api/types.js';
 
 // ============================================================
 // Raw API Tool
@@ -144,13 +144,47 @@ const TOOLS: ToolDefinition[] = [
   raw_sentry_api_tool,
 ];
 
-// Tools refused when SENTRY_READ_ONLY is enabled
-const MUTATING_TOOLS = [
-  'update_sentry_issue_status',
-  'create_sentry_issue_comment',
-  'bulk_update_issues',
-  'merge_issues',
-];
+// MCP annotations. The spec defaults destructiveHint to true, so every tool states it.
+// Tools without readOnlyHint are mutating: refused and hidden under SENTRY_READ_ONLY.
+const READ: ToolAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
+const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
+  get_sentry_issue: { title: 'Get issue', ...READ },
+  list_sentry_projects: { title: 'List projects', ...READ },
+  list_sentry_issues: { title: 'List project issues', ...READ },
+  list_issues: { title: 'Search issues', ...READ },
+  update_sentry_issue_status: { title: 'Set issue status', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+  create_sentry_issue_comment: { title: 'Comment on issue', readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  get_issue_hashes: { title: 'Get issue hashes', ...READ },
+  bulk_update_issues: { title: 'Bulk update issues', readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+  get_sentry_event_details: { title: 'Get event', ...READ },
+  list_issue_events: { title: 'List issue events', ...READ },
+  list_error_events: { title: 'List project events', ...READ },
+  get_stack_frames: { title: 'Get stack frames', ...READ },
+  check_dsym_status: { title: 'Check debug symbols', ...READ },
+  list_breadcrumbs: { title: 'List breadcrumbs', ...READ },
+  list_releases: { title: 'List releases', ...READ },
+  get_release_details: { title: 'Get release', ...READ },
+  list_teams: { title: 'List teams', ...READ },
+  get_issue_tags: { title: 'Get issue tags', ...READ },
+  get_issue_tag_values: { title: 'Get tag values', ...READ },
+  list_activity: { title: 'List issue activity', ...READ },
+  get_trace_details: { title: 'Get trace', ...READ },
+  get_grouping_config: { title: 'Explain grouping', ...READ },
+  merge_issues: { title: 'Merge issues', readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+  // GET-only under SENTRY_READ_ONLY; otherwise it can PUT/POST/DELETE anything the token allows
+  raw_sentry_api: READ_ONLY
+    ? { title: 'Raw Sentry API (GET only)', ...READ }
+    : { title: 'Raw Sentry API', readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+};
+
+// Tools refused when SENTRY_READ_ONLY is enabled (raw_sentry_api is restricted to GET instead)
+const MUTATING_TOOLS = TOOLS
+  .map(tool => tool.name)
+  .filter(name => name !== 'raw_sentry_api' && !TOOL_ANNOTATIONS[name]?.readOnlyHint);
+
+const LISTED_TOOLS: ToolDefinition[] = TOOLS
+  .filter(tool => !(READ_ONLY && MUTATING_TOOLS.includes(tool.name)))
+  .map(tool => ({ ...tool, annotations: TOOL_ANNOTATIONS[tool.name] }));
 
 // ============================================================
 // Server Class
@@ -166,9 +200,10 @@ export class SelfHostedSentryServer {
       {
         name: 'sentry-selfhosted-mcp',
         version: SERVER_VERSION,
-        description: 'MCP server for self-hosted Sentry instances with debugging-focused tools. 24 tools available.',
+        description: `MCP server for self-hosted Sentry instances with debugging-focused tools. ${LISTED_TOOLS.length} tools available${READ_ONLY ? ' (read-only)' : ''}.`,
       },
-      { capabilities: { resources: { list: true }, tools: {} } }
+      // `resources` takes only subscribe/listChanged flags; the empty object declares plain listing
+      { capabilities: { resources: {}, tools: {} } }
     );
 
     this.setupToolHandlers();
@@ -180,8 +215,9 @@ export class SelfHostedSentryServer {
 
   private setupToolHandlers() {
     // List tools
+    // Mutating tools are hidden under SENTRY_READ_ONLY so agents don't plan around them
     this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
-      tools: TOOLS,
+      tools: LISTED_TOOLS,
     }));
 
     // Call tool
@@ -335,7 +371,7 @@ async function handleRawApi(args: unknown) {
     responseData = grepFilter(responseData, args.grep_pattern);
   }
 
-  return { content: [{ type: 'text', text: JSON.stringify(responseData, null, 2) }] };
+  return { content: [{ type: 'text', text: JSON.stringify(responseData) }] };
 }
 
 // ============================================================

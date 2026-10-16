@@ -292,7 +292,7 @@ export function extractEssentialEventEntry(entry: unknown, options: ExtractEntry
       const values = data.values as unknown[];
       return {
         type: e.type,
-        data: { values: values.slice(-10) },
+        data: { values: values.slice(-10).map(compactBreadcrumb) },
       };
     }
   }
@@ -344,6 +344,50 @@ export function compactContexts(contexts: unknown, maxStringLength = 200): Recor
 }
 
 // ============================================================
+// Breadcrumb compaction
+
+const BREADCRUMB_MESSAGE_CHARS = 500;
+const BREADCRUMB_DATA_VALUE_CHARS = 200;
+// eslint-disable-next-line no-control-regex
+const ANSI_ESCAPE_PATTERN = /\u001b\[[0-9;]*[A-Za-z]/g;
+
+const clip = (text: string, max: number): string =>
+  text.length > max ? `${text.slice(0, max)}… [${text.length - max} more chars]` : text;
+
+/**
+ * One breadcrumb reduced for an agent. Logging integrations attach the full log
+ * record under underscore-prefixed `data` keys (structlog's `_record` repeats the
+ * message with ANSI colour codes, ~900 chars per crumb); those are dropped and the
+ * remaining values are clipped.
+ */
+export function compactBreadcrumb(crumb: unknown): Record<string, unknown> {
+  const c = isRecord(crumb) ? crumb : {};
+  const message = typeof c.message === 'string'
+    ? clip(c.message.replace(ANSI_ESCAPE_PATTERN, ''), BREADCRUMB_MESSAGE_CHARS)
+    : c.message;
+
+  let data: Record<string, unknown> | undefined;
+  if (isRecord(c.data)) {
+    for (const [key, value] of Object.entries(c.data)) {
+      if (key.startsWith('_')) continue;
+      const text = typeof value === 'string' ? value.replace(ANSI_ESCAPE_PATTERN, '') : JSON.stringify(value);
+      data ??= {};
+      data[key] = text !== undefined && text.length > BREADCRUMB_DATA_VALUE_CHARS
+        ? clip(text, BREADCRUMB_DATA_VALUE_CHARS)
+        : (typeof value === 'string' ? text : value);
+    }
+  }
+
+  return {
+    type: c.type || 'default',
+    category: c.category,
+    level: c.level,
+    timestamp: c.timestamp,
+    message,
+    data,
+  };
+}
+
 // Breadcrumbs
 // ============================================================
 
@@ -369,14 +413,7 @@ export function extractBreadcrumbTrail(eventData: unknown, limit: number = 50, t
       const c = isRecord(crumb) ? crumb : {};
       const type = c.type || 'default';
       if (typeFilter && type !== typeFilter) continue;
-      matching.push({
-        type,
-        category: c.category,
-        message: c.message,
-        timestamp: c.timestamp,
-        level: c.level,
-        data: c.data,
-      });
+      matching.push(compactBreadcrumb(c));
     }
   }
 

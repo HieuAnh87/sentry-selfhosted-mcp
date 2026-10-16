@@ -79,25 +79,29 @@ export const isValidListIssuesArgs = (args: unknown): args is {
   status?: string;
   limit?: number;
   cursor?: string;
+  full?: boolean;
 } =>
   isObject(args) &&
   isSlug(args.project_slug) &&
   isOptional(args.query, isString) &&
   isOptional(args.status, value => isEnum(value, ISSUE_STATUSES)) &&
   isOptional(args.limit, value => isNumberInRange(value, 1, 100)) &&
-  isOptional(args.cursor, isString);
+  isOptional(args.cursor, isString) &&
+  isOptional(args.full, isBoolean);
 
 export const isValidSearchIssuesArgs = (args: unknown): args is {
   query?: string;
   sort?: string;
   limit?: number;
   cursor?: string;
+  full?: boolean;
 } =>
   isObject(args) &&
   isOptional(args.query, isString) &&
   isOptional(args.sort, value => isEnum(value, ISSUE_SORTS)) &&
   isOptional(args.limit, value => isNumberInRange(value, 1, 100)) &&
-  isOptional(args.cursor, isString);
+  isOptional(args.cursor, isString) &&
+  isOptional(args.full, isBoolean);
 
 export const isValidUpdateIssueArgs = (args: unknown): args is {
   issue_id: string;

@@ -101,12 +101,19 @@ describe('SENTRY_READ_ONLY enabled', () => {
     });
   }
 
-  it('still serves the full tool list', async () => {
-    // Read-only refuses calls; it does not hide tools, so a client's view of the
-    // contract stays stable.
-    const tools = await server.listTools();
+  it('hides the mutating tools from the tool list', async () => {
+    // Listing tools that will always be refused only makes agents plan around them.
+    const names = (await server.listTools()).map(tool => tool.name);
 
-    assert.strictEqual(tools.length, 24);
+    assert.strictEqual(names.length, 20);
+    for (const [name] of MUTATING_TOOLS) assert.ok(!names.includes(name), `${name} must not be listed`);
+    assert.ok(names.includes('raw_sentry_api'), 'raw_sentry_api stays, restricted to GET');
+  });
+
+  it('annotates raw_sentry_api as read-only when it is restricted to GET', async () => {
+    const raw = (await server.listTools()).find(tool => tool.name === 'raw_sentry_api');
+
+    assert.strictEqual(raw.annotations.readOnlyHint, true);
   });
 });
 

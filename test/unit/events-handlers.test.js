@@ -174,3 +174,28 @@ describe('list_issue_events / list_error_events', () => {
     assert.strictEqual(json(result, 1).next_cursor, '0:1:0');
   });
 });
+
+describe('get_sentry_event_details — drops bookkeeping fields', () => {
+  beforeEach(() => nock.cleanAll());
+  afterEach(() => nock.cleanAll());
+
+  it('removes _meta and sdkUpdates, and reduces release and groupingConfig', async () => {
+    nock(BASE).get(EVENT_PATH).reply(200, {
+      id: 'abc',
+      entries: [{ type: 'message', data: { formatted: 'hi' } }],
+      _meta: { entries: { 1: { data: { values: { 0: { '': { len: 538 } } } } } } },
+      sdkUpdates: [{ type: 'enableIntegration', integrationName: 'fastapi' }],
+      release: { version: '1.2.3', shortVersion: '1.2.3', dateCreated: 'd', authors: [{ name: 'a' }], lastCommit: { id: 'c' } },
+      groupingConfig: { id: 'newstyle:2026-01-20', enhancements: 'x'.repeat(500) },
+    });
+
+    const out = json(await handleGetSentryEventDetails({ project_slug: 'web', event_id: 'abc' }));
+
+    assert.strictEqual(out._meta, undefined);
+    assert.strictEqual(out._meta_removed, true);
+    assert.strictEqual(out.sdkUpdates, undefined);
+    assert.strictEqual(out._sdkUpdates_removed, true);
+    assert.deepStrictEqual(out.release, { version: '1.2.3', shortVersion: '1.2.3', dateCreated: 'd' });
+    assert.strictEqual(out.groupingConfig, 'newstyle:2026-01-20');
+  });
+});

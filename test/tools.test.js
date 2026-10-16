@@ -34,12 +34,12 @@ const expectedTools = [
   {
     name: 'list_sentry_issues',
     required: ['project_slug'],
-    optional: ['query', 'status', 'limit', 'cursor'],
+    optional: ['query', 'status', 'limit', 'cursor', 'full'],
   },
   {
     name: 'list_issues',
     required: [],
-    optional: ['query', 'sort', 'limit', 'cursor'],
+    optional: ['query', 'sort', 'limit', 'cursor', 'full'],
   },
   {
     name: 'update_sentry_issue_status',
@@ -234,6 +234,30 @@ describe('Sentry MCP Server Tools (live tools/list contract)', () => {
 
     for (const tool of newTools) {
       assert.ok(actualByName.has(tool), `New tool '${tool}' should be served by the running server`);
+    }
+  });
+
+  it('annotates every tool, stating destructiveHint explicitly', () => {
+    // The MCP spec defaults destructiveHint to true, so an omitted hint marks a read tool as destructive.
+    for (const tool of actualTools) {
+      assert.strictEqual(typeof tool.annotations?.readOnlyHint, 'boolean', `${tool.name} readOnlyHint`);
+      assert.strictEqual(typeof tool.annotations?.destructiveHint, 'boolean', `${tool.name} destructiveHint`);
+      assert.ok(tool.annotations.title, `${tool.name} title`);
+    }
+  });
+
+  it('marks exactly the tools that write to Sentry as not read-only', () => {
+    const writers = actualTools.filter(tool => !tool.annotations.readOnlyHint).map(tool => tool.name).sort();
+
+    assert.deepStrictEqual(writers, [
+      'bulk_update_issues',
+      'create_sentry_issue_comment',
+      'merge_issues',
+      'raw_sentry_api',
+      'update_sentry_issue_status',
+    ]);
+    for (const name of ['bulk_update_issues', 'merge_issues', 'raw_sentry_api']) {
+      assert.strictEqual(actualByName.get(name).annotations.destructiveHint, true, `${name} is destructive`);
     }
   });
 

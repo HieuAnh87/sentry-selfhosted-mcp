@@ -224,7 +224,7 @@ describe('pagination block', () => {
   it('list_issues forwards cursor and appends the next one', async () => {
     const scope = nock(BASE)
       .get('/api/0/organizations/org/issues/')
-      .query({ cursor: '0:25:0', limit: 25 })
+      .query({ cursor: '0:25:0', limit: 25, collapse: 'stats' })
       .reply(200, [{ id: '2' }], { Link: LINK_MORE });
 
     const result = await handleListIssues({ cursor: '0:25:0' });
@@ -388,5 +388,46 @@ describe('compact mutation results', () => {
     const result = json(await handleCreateComment({ issue_id: '5', comment_text: 'hi' }));
 
     assert.deepStrictEqual(result, { created: true, comment_id: '900', issue_id: '5', dateCreated: '2026-01-01T00:00:00Z' });
+  });
+});
+
+describe('list tools return compact issues unless full is set', () => {
+  beforeEach(() => nock.cleanAll());
+  afterEach(() => nock.cleanAll());
+
+  const RAW_ISSUE = {
+    id: '381', shortId: 'CHAT-SERVICE-4', title: 'boom', culprit: 'app.main', level: 'error',
+    status: 'unresolved', count: '178', userCount: 0, firstSeen: 'a', lastSeen: 'b',
+    project: { id: '8', slug: 'chat-service', name: 'chat-service', platform: 'python' },
+    metadata: { type: 'Error', value: 'x'.repeat(1000), filename: 'a.py', function: 'f' },
+    stats: { '24h': Array.from({ length: 24 }, (_, i) => [i, 0]) },
+    isBookmarked: false, seerFixabilityScore: null, annotations: [],
+  };
+
+  it('list_sentry_issues drops stats and flags and asks Sentry not to compute stats', async () => {
+    const scope = nock(BASE)
+      .get('/api/0/projects/org/chat-service/issues/')
+      .query({ limit: 25, statsPeriod: '' })
+      .reply(200, [RAW_ISSUE]);
+
+    const [issue] = json(await handleListSentryIssues({ project_slug: 'chat-service' }));
+
+    assert.ok(scope.isDone());
+    assert.strictEqual(issue.shortId, 'CHAT-SERVICE-4');
+    assert.deepStrictEqual(issue.project, { id: '8', slug: 'chat-service' });
+    assert.strictEqual(issue.stats, undefined);
+    assert.strictEqual(issue.isBookmarked, undefined);
+    assert.ok(issue.metadata.value.length <= 301, 'metadata value is clipped');
+  });
+
+  it('full: true returns the raw Sentry objects with their stats', async () => {
+    nock(BASE)
+      .get('/api/0/organizations/org/issues/')
+      .query({ limit: 25 })
+      .reply(200, [RAW_ISSUE]);
+
+    const [issue] = json(await handleListIssues({ full: true }));
+
+    assert.deepStrictEqual(issue, RAW_ISSUE);
   });
 });

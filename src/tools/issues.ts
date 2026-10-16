@@ -93,6 +93,7 @@ export const list_sentry_issues_tool: ToolDefinition = {
       status: { type: 'string', enum: ['resolved', 'unresolved', 'ignored'], description: 'Filter by status.' },
       limit: { type: 'number', description: 'Max issues (1-100, default: 25).', minimum: 1, maximum: 100 },
       cursor: { type: 'string', description: 'Pagination cursor (next_cursor from a previous call).' },
+      full: { type: 'boolean', description: "Return Sentry's full issue objects (stats, annotations, flags) instead of the compact triage fields (default: false)." },
     },
     required: ['project_slug'],
   },
@@ -121,6 +122,7 @@ export const list_issues_tool: ToolDefinition = {
         maximum: 100,
       },
       cursor: { type: 'string', description: 'Pagination cursor (next_cursor from a previous call).' },
+      full: { type: 'boolean', description: "Return Sentry's full issue objects (stats, annotations, flags) instead of the compact triage fields (default: false)." },
     },
     required: [],
   },
@@ -250,6 +252,41 @@ const extractEssentialHash = (hash: unknown): unknown => {
   };
 };
 
+const ISSUE_METADATA_VALUE_CHARS = 300;
+
+/**
+ * Triage fields of a listed issue. Sentry's list objects run ~1.5 KB each, mostly
+ * stats series, flags and Seer fields; `full: true` returns them unchanged.
+ */
+export const compactIssue = (issue: unknown): Record<string, unknown> => {
+  const i = asRecord(issue) ?? {};
+  const project = asRecord(i.project);
+  const assignee = asRecord(i.assignedTo);
+  const metadata = asRecord(i.metadata);
+  const value = typeof metadata?.value === 'string' && metadata.value.length > ISSUE_METADATA_VALUE_CHARS
+    ? `${metadata.value.slice(0, ISSUE_METADATA_VALUE_CHARS)}…`
+    : metadata?.value;
+  return {
+    id: i.id,
+    shortId: i.shortId,
+    title: i.title,
+    culprit: i.culprit || undefined,
+    level: i.level,
+    status: i.status,
+    substatus: i.substatus,
+    priority: i.priority,
+    isUnhandled: i.isUnhandled,
+    count: i.count,
+    userCount: i.userCount,
+    firstSeen: i.firstSeen,
+    lastSeen: i.lastSeen,
+    project: project ? { id: project.id, slug: project.slug } : undefined,
+    assignedTo: assignee ? { type: assignee.type, name: assignee.name } : undefined,
+    metadata: metadata ? { type: metadata.type, value, filename: metadata.filename, function: metadata.function } : undefined,
+    permalink: i.permalink,
+  };
+};
+
 /**
  * Serialize a payload as tool text, prepending the truncation note when one applies.
  * When another page exists, its cursor goes in a second content block so the
@@ -257,7 +294,8 @@ const extractEssentialHash = (hash: unknown): unknown => {
  */
 export function truncatedTextResult(payload: unknown, page?: PageInfo): ToolResult {
   const { data, truncated, pagination_info } = truncateResponse(payload);
-  let resultText = JSON.stringify(data, null, 2);
+  // Compact JSON: indentation was ~40% of every response's characters, and models read it fine
+  let resultText = JSON.stringify(data);
   if (truncated && pagination_info) {
     resultText = `${pagination_info}\n\n${resultText}`;
   }
@@ -483,10 +521,14 @@ export async function handleListSentryIssues(args: unknown): Promise<ToolResult>
   if (args.cursor) params.cursor = args.cursor;
   if (params.limit === undefined) params.limit = 25;
 
+  // Stats series are dropped from the compact view, so don't make Sentry compute them
+  // (the project endpoint disables them with an empty statsPeriod; it ignores `collapse`)
+  if (!args.full) params.statsPeriod = '';
+
   console.error(`Fetching issues for project ${args.project_slug} in org ${ORG_SLUG}`);
   const page = await sentryClient.listProjectIssues(ORG_SLUG, args.project_slug, params);
 
-  return truncatedTextResult(page.data, page);
+  return truncatedTextResult(args.full ? page.data : page.data.map(compactIssue), page);
 }
 
 export async function handleListIssues(args: unknown): Promise<ToolResult> {
@@ -501,10 +543,13 @@ export async function handleListIssues(args: unknown): Promise<ToolResult> {
   if (args.cursor) params.cursor = args.cursor;
   if (params.limit === undefined) params.limit = 25;
 
+  // The organization endpoint rejects an empty statsPeriod; `collapse=stats` skips the series
+  if (!args.full) params.collapse = 'stats';
+
   console.error(`Searching issues in org ${ORG_SLUG} with query: ${args.query || '(none)'}`);
   const page = await sentryClient.searchIssues(ORG_SLUG, params);
 
-  return truncatedTextResult(page.data, page);
+  return truncatedTextResult(args.full ? page.data : page.data.map(compactIssue), page);
 }
 
 export async function handleUpdateIssueStatus(args: unknown): Promise<ToolResult> {

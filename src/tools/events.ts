@@ -262,14 +262,27 @@ export async function handleGetSentryEventDetails(args: unknown): Promise<ToolRe
     }
   }
 
-  // Remove large fields (contexts stay, in compact form, only when requested)
-  const fieldsToRemove = ['sdk', 'packages', 'user', 'request', 'environment'];
+  // Remove large fields (contexts stay, in compact form, only when requested).
+  // `_meta` is Sentry's scrubbing bookkeeping and `sdkUpdates` are integration
+  // suggestions: together ~1.5 KB per event and no use for debugging.
+  const fieldsToRemove = ['sdk', 'packages', 'user', 'request', 'environment', '_meta', 'sdkUpdates'];
   if (args.entry_type !== 'contexts') fieldsToRemove.push('contexts');
   for (const field of fieldsToRemove) {
     if (output[field]) {
-      output[`_${field}_removed`] = true;
+      output[`_${field.replace(/^_/, '')}_removed`] = true;
       delete output[field];
     }
+  }
+
+  // The embedded release carries authors, commits and deploys; get_release_details has those
+  const release = output.release;
+  if (release && typeof release === 'object') {
+    const r = release as Rec;
+    output.release = { version: r.version, shortVersion: r.shortVersion, dateCreated: r.dateCreated, dateReleased: r.dateReleased };
+  }
+  const groupingConfig = output.groupingConfig;
+  if (groupingConfig && typeof groupingConfig === 'object') {
+    output.groupingConfig = (groupingConfig as Rec).id;
   }
 
   return truncatedTextResult(output);

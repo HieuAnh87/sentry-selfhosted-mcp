@@ -167,9 +167,19 @@ export interface SentryProject {
 // MCP Tool Types
 // ============================================================
 
+/** MCP tool annotations: hints for clients deciding whether to confirm a call. */
+export interface ToolAnnotations {
+  title?: string;
+  readOnlyHint?: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint?: boolean;
+}
+
 export interface ToolDefinition {
   name: string;
   description: string;
+  annotations?: ToolAnnotations;
   inputSchema: {
     type: 'object';
     properties: Record<string, unknown>;
