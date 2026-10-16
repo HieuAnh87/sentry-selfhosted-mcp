@@ -113,6 +113,11 @@ check the following.
   were computed from the returned page only.
 - List endpoints that page with `per_page` (events, releases, tag values) ignored `limit`; both
   are now sent.
+- **A proxy error page lost its HTTP status.** When Sentry or a reverse proxy answered with a
+  non-JSON body (e.g. `504 upstream request timeout`), axios' strict JSON parsing discarded the
+  response and the tool reported only `Unexpected token ...`. Bodies are now parsed by the client,
+  so the error keeps its status and a snippet of the body; 502/503/504 get a message suggesting a
+  retry or a narrower request.
 - **`list_issues` sent `POST` to the organization issues endpoint.** Searching issues is a `GET`;
   the tool now uses it.
 - **Tool handler errors could escape the server's error handling.** The dispatcher returned

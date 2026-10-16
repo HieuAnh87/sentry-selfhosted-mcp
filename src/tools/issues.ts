@@ -338,6 +338,11 @@ const mapAxiosError = (error: AxiosError, toolName: string): string => {
     const wait = after ? ` Retry-After: ${after} — wait that long before retrying.` : ' Wait before retrying.';
     return `Sentry API rate limit hit for ${toolName} (HTTP 429).${wait}${said}`;
   }
+  if (status === 502 || status === 503 || status === 504) {
+    return `Sentry (or a proxy in front of it) did not answer in time for ${toolName} (HTTP ${status}). `
+      + 'Retry once; if it keeps failing, narrow the request (a more specific query, a smaller limit, a single project). '
+      + `Response: ${detail ?? bodySnippet(data)}`;
+  }
   return `Sentry API error for ${toolName}: ${error.message}. Status: ${status}. Response: ${detail ?? bodySnippet(data)}`;
 };
 

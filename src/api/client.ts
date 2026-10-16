@@ -24,6 +24,17 @@ function seg(value: string): string {
   return encodeURIComponent(value);
 }
 
+/** Parse a raw response body; an empty body (e.g. 204) is valid and yields ''. */
+function parseJsonBody(data: unknown): { ok: true; value: unknown } | { ok: false } {
+  if (typeof data !== 'string') return { ok: true, value: data };
+  if (data.trim() === '') return { ok: true, value: '' };
+  try {
+    return { ok: true, value: JSON.parse(data) };
+  } catch {
+    return { ok: false };
+  }
+}
+
 /** Which issues a bulk mutation applies to. At least one of the two is required. */
 export interface IssueSelector {
   ids?: string[];
@@ -58,20 +69,38 @@ export class SentryApiClient {
     // endpoint must not be usable as a redirect trampoline for SSRF, and some
     // redirect implementations retain credentials for related hosts.
     maxRedirects: 0,
-    // Surface non-JSON bodies (proxy/SSO HTML pages, truncated responses) as errors
-    // instead of silently handing the raw string back as if it were an issue.
-    // Both settings are required: axios only parses strictly when responseType is 'json'.
-    responseType: 'json',
-    transitional: { silentJSONParsing: false },
+    // Bodies are parsed in the interceptors below, not by axios: when axios' own
+    // strict JSON parsing fails it drops the response, so a proxy's "504 upstream
+    // request timeout" page surfaced as a bare "Unexpected token" with no status.
+    responseType: 'text',
+    transformResponse: [(data: unknown) => data],
   });
 
   constructor() {
-    // Log all errors for debugging
     this.client.interceptors.response.use(
-      (response: AxiosResponse) => response,
+      (response: AxiosResponse) => {
+        const parsed = parseJsonBody(response.data);
+        if (!parsed.ok) {
+          // Proxy/SSO HTML pages and truncated bodies must not pass as Sentry data.
+          throw new AxiosError(
+            `Sentry returned a non-JSON response (HTTP ${response.status}, ${String(response.headers?.['content-type'] ?? 'no content type')})`,
+            AxiosError.ERR_BAD_RESPONSE,
+            response.config,
+            response.request,
+            response
+          );
+        }
+        response.data = parsed.value;
+        return response;
+      },
       (error: AxiosError) => {
+        // Keep the status and decode JSON error bodies; leave non-JSON ones as text.
+        if (error.response) {
+          const parsed = parseJsonBody(error.response.data);
+          if (parsed.ok) error.response.data = parsed.value;
+        }
         const url = error.config?.url || 'unknown';
-        console.error(`[Sentry API Error] ${url}:`, error.message);
+        console.error(`[Sentry API Error] ${url}: ${error.message}`);
         return Promise.reject(error);
       }
     );

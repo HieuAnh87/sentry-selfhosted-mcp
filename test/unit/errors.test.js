@@ -149,6 +149,26 @@ describe('tool error mapping', () => {
     const result = await callTool(() => handleListSentryProjects(), 'list_sentry_projects');
 
     assert.strictEqual(result.isError, true);
+    assert.match(textOf(result), /non-JSON response \(HTTP 200, text\/html\)/);
+  });
+
+  it('keeps the status of a proxy timeout page instead of a JSON parse error', async () => {
+    nock(BASE).get(ISSUE_PATH).reply(504, 'upstream request timeout', { 'content-type': 'text/plain' });
+
+    const result = await callTool(() => handleGetSentryIssue({ issue_id_or_url: '123' }), 'get_sentry_issue');
+
+    assert.strictEqual(result.isError, true);
+    assert.match(textOf(result), /HTTP 504/);
+    assert.match(textOf(result), /upstream request timeout/);
+    assert.doesNotMatch(textOf(result), /Unexpected token/);
+  });
+
+  it('still decodes a JSON error body for its detail', async () => {
+    nock(BASE).get(ISSUE_PATH).reply(403, JSON.stringify({ detail: 'Missing scope event:read' }), { 'content-type': 'application/json' });
+
+    const result = await callTool(() => handleGetSentryIssue({ issue_id_or_url: '123' }), 'get_sentry_issue');
+
+    assert.match(textOf(result), /Missing scope event:read/);
   });
 });
 
