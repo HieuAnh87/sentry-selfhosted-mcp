@@ -36,14 +36,23 @@ Which scope each tool needs: [Token scopes](#token-scopes).
 
 ### 3. Install
 
-> **Use 1.2.0 or later.** Every earlier version is deprecated: its `raw_sentry_api` accepted absolute URLs and sent your Sentry auth token to them, and it has no `SENTRY_READ_ONLY`. If you ran an earlier version with an agent that reads Sentry data, rotate the token. `npx -y selfhosted-sentry-mcp` fetches the latest release; a globally installed copy needs `npm install -g selfhosted-sentry-mcp@latest`. Check what you have with `npm ls -g selfhosted-sentry-mcp`.
+> **Use 1.2.0 or later.** Every earlier version is deprecated: its `raw_sentry_api` accepted absolute URLs and sent your Sentry auth token to them, and it has no `SENTRY_READ_ONLY`. If you ran an earlier version with an agent that reads Sentry data, rotate the token. The examples use `selfhosted-sentry-mcp@latest` so `npx` checks for the newest release instead of reusing an older copy from its cache. Check what you have with `npm ls -g selfhosted-sentry-mcp`.
+
+<!-- TEMPORARY: remove this note once `npm view selfhosted-sentry-mcp version` prints 1.2.0 -->
+> **npm still serves 1.1.2 for now.** 1.2.0 is [released on GitHub](https://github.com/HieuAnh87/sentry-selfhosted-mcp/releases/tag/v1.2.0); the npm release is pending. Until `npm view selfhosted-sentry-mcp version` prints `1.2.0`, use the release tarball in place of `selfhosted-sentry-mcp@latest` in every example below:
+>
+> ```bash
+> npx -y https://github.com/HieuAnh87/sentry-selfhosted-mcp/releases/download/v1.2.0/selfhosted-sentry-mcp-1.2.0.tgz
+> ```
+>
+> In a client config that means `"args": ["-y", "https://github.com/HieuAnh87/sentry-selfhosted-mcp/releases/download/v1.2.0/selfhosted-sentry-mcp-1.2.0.tgz"]`.
 
 **Nothing to install.** The recommended setup runs the published package through `npx` straight from your MCP client config — skip to [Client configuration](#client-configuration).
 
 To install it globally anyway:
 
 ```bash
-npm install -g selfhosted-sentry-mcp
+npm install -g selfhosted-sentry-mcp@latest
 ```
 
 From source:
@@ -119,7 +128,7 @@ Where the config file goes:
   "mcpServers": {
     "sentry": {
       "command": "npx",
-      "args": ["-y", "selfhosted-sentry-mcp"],
+      "args": ["-y", "selfhosted-sentry-mcp@latest"],
       "env": {
         "SENTRY_URL": "https://your-sentry-instance.com",
         "SENTRY_AUTH_TOKEN": "your-auth-token",
@@ -143,7 +152,7 @@ claude mcp add --env SENTRY_URL=https://your-sentry-instance.com \
   --env SENTRY_ORG_SLUG=your-org-slug \
   --env SENTRY_READ_ONLY=true \
   --transport stdio --scope user sentry \
-  -- npx -y selfhosted-sentry-mcp
+  -- npx -y selfhosted-sentry-mcp@latest
 ```
 
 **Option 2: global npm install**
@@ -193,10 +202,10 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | \
   SENTRY_URL=https://your-sentry-instance.com \
   SENTRY_AUTH_TOKEN=your-auth-token \
   SENTRY_ORG_SLUG=your-org-slug \
-  npx -y selfhosted-sentry-mcp
+  npx -y selfhosted-sentry-mcp@latest
 ```
 
-You should see a JSON response listing 28 tools, plus a startup line on stderr naming your org slug and Sentry URL. (Fewer than 28 means an outdated version — see the [version note](#3-install). For a source build, replace `npx -y selfhosted-sentry-mcp` with `node build/index.js`.)
+You should see a JSON response listing 28 tools, plus a startup line on stderr naming your org slug and Sentry URL. (Fewer than 28 means an outdated version — see the [version note](#3-install). For a source build, replace `npx -y selfhosted-sentry-mcp@latest` with `node build/index.js`.)
 
 ```
 Self-hosted Sentry MCP server v… running for org "your-org-slug" at https://your-sentry-instance.com
@@ -207,7 +216,7 @@ If the process exits instead, one of the three required environment variables is
 Or drive it interactively with the MCP inspector:
 
 ```bash
-npx @modelcontextprotocol/inspector npx -y selfhosted-sentry-mcp
+npx @modelcontextprotocol/inspector npx -y selfhosted-sentry-mcp@latest
 ```
 
 ## Usage

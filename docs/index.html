@@ -418,6 +418,8 @@
     }
     .step p code,
     .quickstart .version-note code {
+      /* Long URLs (the release tarball) must wrap on narrow screens */
+      overflow-wrap: anywhere;
       font-family: "SF Mono", "Fira Code", monospace;
       font-size: 12px;
       background: var(--border-light);
@@ -966,6 +968,8 @@
           </div>
         </div>
         <p class="version-note"><strong>Use 1.2.0 or later.</strong> Earlier versions are deprecated: they can send your Sentry token to arbitrary hosts through <code>raw_sentry_api</code> and ignore <code>SENTRY_READ_ONLY</code>. If you ran one with an agent, rotate the token. See the <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp/blob/main/CHANGELOG.md" target="_blank" rel="noopener">changelog</a>.</p>
+        <!-- TEMPORARY: remove once npm serves 1.2.0 -->
+        <p class="version-note"><strong>npm still serves 1.1.2 for now.</strong> Until the npm release lands, replace <code>selfhosted-sentry-mcp@latest</code> in the config with the <a href="https://github.com/HieuAnh87/sentry-selfhosted-mcp/releases/tag/v1.2.0" target="_blank" rel="noopener">v1.2.0 GitHub release</a> tarball: <code>https://github.com/HieuAnh87/sentry-selfhosted-mcp/releases/download/v1.2.0/selfhosted-sentry-mcp-1.2.0.tgz</code></p>
       </div>
       <div class="code-block">
         <div class="code-tabs" role="tablist" aria-label="MCP client configuration examples">
@@ -986,7 +990,7 @@
     <span class="key">"sentry"</span>: {
       <span class="key">"type"</span>: <span class="string">"stdio"</span>,
       <span class="key">"command"</span>: <span class="string">"npx"</span>,
-      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"selfhosted-sentry-mcp"</span>],
+      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"selfhosted-sentry-mcp@latest"</span>],
       <span class="key">"env"</span>: {
         <span class="key">"SENTRY_URL"</span>: <span class="string">"https://sentry.yourcompany.com"</span>,
         <span class="key">"SENTRY_AUTH_TOKEN"</span>: <span class="string">"&lt;your-token&gt;"</span>,
@@ -1003,7 +1007,7 @@
   <span class="key">"mcpServers"</span>: {
     <span class="key">"sentry"</span>: {
       <span class="key">"command"</span>: <span class="string">"npx"</span>,
-      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"selfhosted-sentry-mcp"</span>],
+      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"selfhosted-sentry-mcp@latest"</span>],
       <span class="key">"env"</span>: {
         <span class="key">"SENTRY_URL"</span>: <span class="string">"https://sentry.yourcompany.com"</span>,
         <span class="key">"SENTRY_AUTH_TOKEN"</span>: <span class="string">"&lt;your-token&gt;"</span>,
@@ -1020,7 +1024,7 @@
   <span class="key">"mcpServers"</span>: {
     <span class="key">"sentry"</span>: {
       <span class="key">"command"</span>: <span class="string">"npx"</span>,
-      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"selfhosted-sentry-mcp"</span>],
+      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"selfhosted-sentry-mcp@latest"</span>],
       <span class="key">"env"</span>: {
         <span class="key">"SENTRY_URL"</span>: <span class="string">"https://sentry.yourcompany.com"</span>,
         <span class="key">"SENTRY_AUTH_TOKEN"</span>: <span class="string">"&lt;your-token&gt;"</span>,
@@ -1037,7 +1041,7 @@
   <span class="key">"mcpServers"</span>: {
     <span class="key">"sentry"</span>: {
       <span class="key">"command"</span>: <span class="string">"npx"</span>,
-      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"selfhosted-sentry-mcp"</span>],
+      <span class="key">"args"</span>: [<span class="string">"-y"</span>, <span class="string">"selfhosted-sentry-mcp@latest"</span>],
       <span class="key">"env"</span>: {
         <span class="key">"SENTRY_URL"</span>: <span class="string">"https://sentry.yourcompany.com"</span>,
         <span class="key">"SENTRY_AUTH_TOKEN"</span>: <span class="string">"&lt;your-token&gt;"</span>,
