@@ -16,7 +16,7 @@ Everything below follows from that.
 
 Sentry's scope namespaces are `org:*`, `project:*`, `team:*`, `member:*` and `event:*`. Grant the narrowest set that covers the tools you intend to use.
 
-**Read-only token** — covers 20 of the 24 tools (everything except the four write tools; `raw_sentry_api` is among the 20, limited to what these scopes allow):
+**Read-only token** — covers 24 of the 28 tools (everything except the four write tools; `raw_sentry_api` is among the 24, limited to what these scopes allow):
 
 | Scope | Why |
 | --- | --- |
@@ -34,7 +34,7 @@ Prefer one token per developer or per deployment over a shared organization-wide
 
 ## 2. `raw_sentry_api` bypasses least-privilege reasoning
 
-`raw_sentry_api` takes an arbitrary endpoint path and an arbitrary HTTP method (`GET`, `POST`, `PUT`, `DELETE`). It is not restricted to the endpoints the other 23 tools use.
+`raw_sentry_api` takes an arbitrary endpoint path and an arbitrary HTTP method (`GET`, `POST`, `PUT`, `DELETE`). It is not restricted to the endpoints the other 27 tools use.
 
 This means **the other tools' scope requirements are not a bound on what this server can do.** The real bound is the token. If you grant `org:admin` because some unrelated script needs it, an agent calling `raw_sentry_api` can reach every `org:admin` endpoint on your instance — the tool list gives no hint that this is possible.
 
@@ -53,7 +53,7 @@ Setting `SENTRY_READ_ONLY` to `true` or `1` blocks writes:
 | --- | --- |
 | `update_sentry_issue_status`, `create_sentry_issue_comment`, `bulk_update_issues`, `merge_issues` | Refused outright |
 | `raw_sentry_api` | Restricted to `GET`; `POST`, `PUT` and `DELETE` are refused |
-| The other 19 tools | Unaffected — all are reads |
+| The other 23 tools | Unaffected — all are reads |
 
 **It is opt-in and defaults to `false`**, for backward compatibility with existing installs. If you do nothing, the write tools are exposed.
 

@@ -325,3 +325,59 @@ export const isValidRawApiArgs = (args: unknown): args is {
   isOptional(args.params, value => typeof value === 'object') &&
   isOptional(args.body, value => typeof value === 'object') &&
   isOptional(args.grep_pattern, isString);
+
+// ============================================================
+// Account, Attachment & Feedback Type Guards
+// ============================================================
+
+export const MAX_ATTACHMENT_CHARS = 100_000;
+
+export const isValidWhoamiArgs = (args: unknown): args is Record<string, never> =>
+  args === undefined || isObject(args);
+
+/** Either an issue, or a project + event pair. */
+export const isValidListAttachmentsArgs = (args: unknown): args is {
+  issue_id?: string;
+  project_slug?: string;
+  event_id?: string;
+  limit?: number;
+  cursor?: string;
+} =>
+  isObject(args) &&
+  isOptional(args.issue_id, isIssueId) &&
+  isOptional(args.project_slug, isSlug) &&
+  isOptional(args.event_id, isIdToken) &&
+  isOptional(args.limit, value => isNumberInRange(value, 1, 100)) &&
+  isOptional(args.cursor, isString) &&
+  // Exactly one selection: an issue, or a project + event pair
+  (args.issue_id !== undefined
+    ? args.project_slug === undefined && args.event_id === undefined
+    : args.project_slug !== undefined && args.event_id !== undefined);
+
+export const isValidGetAttachmentArgs = (args: unknown): args is {
+  project_slug: string;
+  event_id: string;
+  attachment_id: string;
+  grep_pattern?: string;
+  max_chars?: number;
+} =>
+  isObject(args) &&
+  isSlug(args.project_slug) &&
+  isIdToken(args.event_id) &&
+  isNumericId(args.attachment_id) &&
+  isOptional(args.grep_pattern, isString) &&
+  isOptional(args.max_chars, value => isNumberInRange(value, 1, MAX_ATTACHMENT_CHARS));
+
+/** Either an issue or a project. */
+export const isValidListUserFeedbackArgs = (args: unknown): args is {
+  issue_id?: string;
+  project_slug?: string;
+  limit?: number;
+  cursor?: string;
+} =>
+  isObject(args) &&
+  isOptional(args.issue_id, isIssueId) &&
+  isOptional(args.project_slug, isSlug) &&
+  (args.issue_id === undefined) !== (args.project_slug === undefined) &&
+  isOptional(args.limit, value => isNumberInRange(value, 1, 100)) &&
+  isOptional(args.cursor, isString);

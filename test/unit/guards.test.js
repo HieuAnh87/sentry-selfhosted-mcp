@@ -391,6 +391,55 @@ const table = [
     invalid: [...NON_OBJECTS, ...BAD_ISSUE_IDS.map(([value, why]) => [{ issue_id: value }, `issue_id with ${why}`])],
   },
   {
+    guard: 'isValidWhoamiArgs',
+    valid: [undefined, {}],
+    invalid: [[null, 'null'], ['x', 'a string']],
+  },
+  {
+    guard: 'isValidListAttachmentsArgs',
+    valid: [
+      { issue_id: '7' },
+      { issue_id: 'WEB-1A3', limit: 10, cursor: 'c' },
+      { project_slug: 'web', event_id: 'abc123' },
+    ],
+    invalid: [
+      ...NON_OBJECTS,
+      [{}, 'no selection'],
+      [{ project_slug: 'web' }, 'a project without an event'],
+      [{ event_id: 'abc' }, 'an event without a project'],
+      [{ issue_id: '7', project_slug: 'web', event_id: 'abc' }, 'both selections'],
+      [{ issue_id: '7', event_id: 'abc' }, 'an issue plus an event'],
+      [{ project_slug: 'web', event_id: '../x' }, 'an event id with path structure'],
+      [{ issue_id: '7', limit: 0 }, 'limit 0'],
+      [{ issue_id: '7', limit: 101 }, 'limit above 100'],
+    ],
+  },
+  {
+    guard: 'isValidGetAttachmentArgs',
+    valid: [
+      { project_slug: 'web', event_id: 'abc', attachment_id: '12' },
+      { project_slug: 'web', event_id: 'abc', attachment_id: '12', grep_pattern: 'error', max_chars: 100000 },
+    ],
+    invalid: [
+      ...NON_OBJECTS,
+      [{ project_slug: 'web', event_id: 'abc' }, 'a missing attachment_id'],
+      [{ project_slug: 'web', event_id: 'abc', attachment_id: '1/2' }, 'a non-numeric attachment_id'],
+      [{ project_slug: 'web', event_id: 'abc', attachment_id: '12', max_chars: 0 }, 'max_chars 0'],
+      [{ project_slug: 'web', event_id: 'abc', attachment_id: '12', max_chars: 100001 }, 'max_chars above the cap'],
+      [{ project_slug: '..', event_id: 'abc', attachment_id: '12' }, 'a dot-segment slug'],
+    ],
+  },
+  {
+    guard: 'isValidListUserFeedbackArgs',
+    valid: [{ issue_id: '7' }, { project_slug: 'web', limit: 5, cursor: 'c' }],
+    invalid: [
+      ...NON_OBJECTS,
+      [{}, 'no selection'],
+      [{ issue_id: '7', project_slug: 'web' }, 'both selections'],
+      [{ issue_id: 'a/b' }, 'an issue id with a slash'],
+    ],
+  },
+  {
     guard: 'isValidRawApiArgs',
     valid: [
       { endpoint: 'projects/o/p/events/' },

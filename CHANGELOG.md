@@ -13,6 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Four read-only tools (28 in total):
+  - `whoami` — the user the token belongs to, its scopes, whether `SENTRY_ORG_SLUG` is reachable,
+    and which tools those scopes rule out. Uses `GET /api/0/`, which answers for any valid token.
+  - `list_event_attachments` — attachments on an issue or on one event, compact, with pagination.
+  - `get_event_attachment` — contents of a text attachment (e.g. a log), keeping the end of the
+    file, with `grep_pattern` and `max_chars`. Binary attachments and files over 5 MB return
+    metadata only; attachments behind an external-storage redirect are not fetched with the token.
+  - `list_user_feedback` — user reports for an issue or project, without reporter emails.
 - `SENTRY_READ_ONLY` environment variable. Set it to `true` or `1` to refuse the four mutating
   tools (`update_sentry_issue_status`, `create_sentry_issue_comment`, `bulk_update_issues`,
   `merge_issues`) and restrict `raw_sentry_api` to `GET`. Defaults to `false`, so existing installs

@@ -3,7 +3,7 @@
 import axios, { AxiosError, AxiosResponse } from 'axios';
 import { BASE_URL, AUTH_TOKEN, TIMEOUT_MS, ORG_SLUG } from '../config.js';
 import { parseLinkHeader } from '../helpers/pagination.js';
-import type { SentryIssue, SentryIssueHash, SentryEvent, SentryRelease, SentryTeam, SentryTag, SentryTagValue, SentryActivity, SentryProject, Paged } from './types.js';
+import type { SentryIssue, SentryIssueHash, SentryEvent, SentryRelease, SentryTeam, SentryTag, SentryTagValue, SentryActivity, SentryProject, SentryAttachment, SentryUserReport, Paged } from './types.js';
 
 // Re-export types for convenience
 export type {
@@ -16,6 +16,8 @@ export type {
   SentryTagValue,
   SentryActivity,
   SentryProject,
+  SentryAttachment,
+  SentryUserReport,
   Paged,
 };
 
@@ -79,6 +81,8 @@ export class SentryApiClient {
   constructor() {
     this.client.interceptors.response.use(
       (response: AxiosResponse) => {
+        // Attachment downloads ask for raw bytes and are decoded by the caller
+        if (response.config.responseType === 'arraybuffer') return response;
         const parsed = parseJsonBody(response.data);
         if (!parsed.ok) {
           // Proxy/SSO HTML pages and truncated bodies must not pass as Sentry data.
@@ -248,6 +252,64 @@ export class SentryApiClient {
   async listIssueActivity(issueId: string, params?: Record<string, unknown>): Promise<Paged<SentryActivity[]>> {
     // The route is `activities/`; `activity/` does not exist and 404s.
     return this.getPaged<SentryActivity[]>(this.issuePath(issueId, 'activities/'), params);
+  }
+
+  // ============================================================
+  // Account
+  // ============================================================
+
+  /** `GET /api/0/`: API version, the token's scopes and the user it belongs to. */
+  async getApiRoot(): Promise<Record<string, unknown>> {
+    return this.get<Record<string, unknown>>('');
+  }
+
+  async getOrganization(orgSlug: string): Promise<Record<string, unknown>> {
+    return this.get<Record<string, unknown>>(`organizations/${seg(orgSlug)}/`);
+  }
+
+  // ============================================================
+  // Attachments & User Feedback
+  // ============================================================
+
+  async listIssueAttachments(issueId: string, params?: Record<string, unknown>): Promise<Paged<SentryAttachment[]>> {
+    return this.getPaged<SentryAttachment[]>(this.issuePath(issueId, 'attachments/'), params);
+  }
+
+  async listEventAttachments(projectSlug: string, eventId: string, params?: Record<string, unknown>): Promise<Paged<SentryAttachment[]>> {
+    return this.getPaged<SentryAttachment[]>(
+      `projects/${seg(ORG_SLUG)}/${seg(projectSlug)}/events/${seg(eventId)}/attachments/`,
+      params
+    );
+  }
+
+  async getEventAttachment(projectSlug: string, eventId: string, attachmentId: string): Promise<SentryAttachment> {
+    return this.get<SentryAttachment>(this.attachmentPath(projectSlug, eventId, attachmentId));
+  }
+
+  /**
+   * Raw attachment bytes, refused above `maxBytes`. Sentry streams locally stored
+   * files; one kept in external storage answers with a redirect, which this
+   * token-bearing client deliberately does not follow.
+   */
+  async downloadEventAttachment(projectSlug: string, eventId: string, attachmentId: string, maxBytes: number): Promise<Buffer> {
+    const response = await this.client.get<ArrayBuffer>(this.attachmentPath(projectSlug, eventId, attachmentId), {
+      params: { download: '1' },
+      responseType: 'arraybuffer',
+      maxContentLength: maxBytes,
+    });
+    return Buffer.from(response.data);
+  }
+
+  private attachmentPath(projectSlug: string, eventId: string, attachmentId: string): string {
+    return `projects/${seg(ORG_SLUG)}/${seg(projectSlug)}/events/${seg(eventId)}/attachments/${seg(attachmentId)}/`;
+  }
+
+  async listIssueUserReports(issueId: string, params?: Record<string, unknown>): Promise<Paged<SentryUserReport[]>> {
+    return this.getPaged<SentryUserReport[]>(this.issuePath(issueId, 'user-reports/'), params);
+  }
+
+  async listProjectUserReports(projectSlug: string, params?: Record<string, unknown>): Promise<Paged<SentryUserReport[]>> {
+    return this.getPaged<SentryUserReport[]>(`projects/${seg(ORG_SLUG)}/${seg(projectSlug)}/user-reports/`, params);
   }
 
   // ============================================================

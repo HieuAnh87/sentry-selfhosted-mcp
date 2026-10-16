@@ -31,7 +31,7 @@ npm run test:smoke              # smoke flow only
 node --test test/tools.test.js  # one file
 ```
 
-`test/tools.test.js` asserts the exported tool list, currently fixed at 24 tools. HTTP is stubbed with `nock`; tests never contact a real Sentry instance.
+`test/tools.test.js` asserts the exported tool list, currently fixed at 28 tools. HTTP is stubbed with `nock`; tests never contact a real Sentry instance.
 
 Run the tool-surface test before opening a PR that touches tools:
 

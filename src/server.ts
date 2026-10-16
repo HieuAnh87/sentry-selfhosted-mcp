@@ -70,6 +70,17 @@ import {
 } from './tools/advanced.js';
 
 // Helpers
+// Account & attachment tools
+import { whoami_tool, handleWhoami } from './tools/account.js';
+import {
+  list_event_attachments_tool,
+  get_event_attachment_tool,
+  list_user_feedback_tool,
+  handleListEventAttachments,
+  handleGetEventAttachment,
+  handleListUserFeedback,
+} from './tools/attachments.js';
+
 import { isValidRawApiArgs } from './helpers/index.js';
 import { grepFilter } from './helpers/grep.js';
 import { sentryClient } from './api/client.js';
@@ -140,6 +151,12 @@ const TOOLS: ToolDefinition[] = [
   get_trace_details_tool,
   get_grouping_config_tool,
   merge_issues_tool,
+  // Attachment & feedback tools
+  list_event_attachments_tool,
+  get_event_attachment_tool,
+  list_user_feedback_tool,
+  // Account
+  whoami_tool,
   // Raw API
   raw_sentry_api_tool,
 ];
@@ -170,6 +187,10 @@ const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   list_activity: { title: 'List issue activity', ...READ },
   get_trace_details: { title: 'Get trace', ...READ },
   get_grouping_config: { title: 'Explain grouping', ...READ },
+  list_event_attachments: { title: 'List attachments', ...READ },
+  get_event_attachment: { title: 'Read attachment', ...READ },
+  list_user_feedback: { title: 'List user feedback', ...READ },
+  whoami: { title: 'Check connection and token', ...READ },
   merge_issues: { title: 'Merge issues', readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
   // GET-only under SENTRY_READ_ONLY; otherwise it can PUT/POST/DELETE anything the token allows
   raw_sentry_api: READ_ONLY
@@ -264,6 +285,14 @@ export class SelfHostedSentryServer {
           case 'get_trace_details': return await handleGetTraceDetails(args);
           case 'get_grouping_config': return await handleGetGroupingConfig(args);
           case 'merge_issues': return await handleMergeIssues(args);
+
+          // Attachment & feedback tools
+          case 'list_event_attachments': return await handleListEventAttachments(args);
+          case 'get_event_attachment': return await handleGetEventAttachment(args);
+          case 'list_user_feedback': return await handleListUserFeedback(args);
+
+          // Account
+          case 'whoami': return await handleWhoami(args);
 
           // Raw API
           case 'raw_sentry_api': return await handleRawApi(args);

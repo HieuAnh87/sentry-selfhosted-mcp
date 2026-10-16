@@ -105,7 +105,7 @@ describe('SENTRY_READ_ONLY enabled', () => {
     // Listing tools that will always be refused only makes agents plan around them.
     const names = (await server.listTools()).map(tool => tool.name);
 
-    assert.strictEqual(names.length, 20);
+    assert.strictEqual(names.length, 24);
     for (const [name] of MUTATING_TOOLS) assert.ok(!names.includes(name), `${name} must not be listed`);
     assert.ok(names.includes('raw_sentry_api'), 'raw_sentry_api stays, restricted to GET');
   });

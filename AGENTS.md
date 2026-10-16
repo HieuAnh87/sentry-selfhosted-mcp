@@ -45,7 +45,7 @@ docker build -t selfhosted-sentry-mcp:latest .   # not sentry-selfhosted-mcp: th
 | Env validation/startup behavior | `src/config.ts` | validation runs on module load; missing env throws immediately |
 | Sentry HTTP endpoints | `src/api/client.ts` | all endpoint path composition centralized here; list methods return `{data, nextCursor, hasMore}` (parsed from Sentry's `Link` header), not a bare array |
 | Output filtering/truncation logic | `src/helpers/{filter,truncate,grep}.ts` | use helpers before returning large JSON |
-| Tool contract expectations | `test/tools.test.js` | expected tool list currently fixed at 24 |
+| Tool contract expectations | `test/tools.test.js` | expected tool list currently fixed at 28 |
 | Pagination | `src/helpers/pagination.ts`, `truncatedTextResult` in `src/tools/issues.ts` | when more results exist, a tool result carries a second text content block `{next_cursor, has_more, hint}`; `content[0]` keeps its shape |
 
 ## Conventions (deviations only)

@@ -36,7 +36,7 @@ Which scope each tool needs: [Token scopes](#token-scopes).
 
 ### 3. Install
 
-> **Version note — read before using `npx` or `npm install -g`.** The current npm release (`latest`, 1.1.2) predates this README. It ships 12 of the 24 tools and has no `SENTRY_READ_ONLY`: it silently ignores the variable and leaves its write tools — including `raw_sentry_api` with `POST`/`PUT`/`DELETE` — enabled. Until 1.2.0 is published, build from source (below, then use [Option 3](#client-configuration) in your client config) or use [Docker](#docker) to get read-only mode and the full tool set. Check what you have with `npm view selfhosted-sentry-mcp version`.
+> **Version note — read before using `npx` or `npm install -g`.** The current npm release (`latest`, 1.1.2) predates this README. It ships 12 of the 28 tools and has no `SENTRY_READ_ONLY`: it silently ignores the variable and leaves its write tools — including `raw_sentry_api` with `POST`/`PUT`/`DELETE` — enabled. Until 1.2.0 is published, build from source (below, then use [Option 3](#client-configuration) in your client config) or use [Docker](#docker) to get read-only mode and the full tool set. Check what you have with `npm view selfhosted-sentry-mcp version`.
 
 **Nothing to install.** The recommended setup runs the published package through `npx` straight from your MCP client config — skip to [Client configuration](#client-configuration).
 
@@ -76,7 +76,7 @@ The server validates the three required variables at startup and exits immediate
 | --- | --- |
 | `update_sentry_issue_status`, `create_sentry_issue_comment`, `bulk_update_issues`, `merge_issues` | Refused outright with an `InvalidRequest` error |
 | `raw_sentry_api` | Still available, but **`POST`, `PUT` and `DELETE` are refused**. `GET` continues to work. |
-| The other 19 tools | Unaffected |
+| The other 23 tools | Unaffected |
 
 Accepted truthy values are `true` and `1` (case-insensitive). Anything else, including unset, leaves the server writable. When enabled, the startup line on stderr ends with `(read-only)`.
 
@@ -84,11 +84,11 @@ Accepted truthy values are `true` and `1` (case-insensitive). Anything else, inc
 
 Sentry's scope namespaces are `org:*`, `project:*`, `team:*`, `member:*` and `event:*`. There is no `issue:*` or `comment:*` scope — issue and comment endpoints live under `event:*`.
 
-**Read-only setup** — covers 20 of the 24 tools (everything except the four write tools):
+**Read-only setup** — covers 24 of the 28 tools (everything except the four write tools):
 
 | Scope | Needed by |
 | --- | --- |
-| `event:read` | Every issue and event tool: `get_sentry_issue`, `list_sentry_issues`, `list_issues`, `get_issue_hashes`, `get_sentry_event_details`, `list_issue_events`, `list_error_events`, `get_stack_frames`, `check_dsym_status`, `list_breadcrumbs`, `get_issue_tags`, `get_issue_tag_values`, `list_activity` (`issues/{id}/activities/`), `get_grouping_config` (reads the issue's latest event), `get_trace_details` (`organizations/{org}/trace/{id}/`, falling back to `events-trace/{id}/` — organization *events* endpoints, gated on `event:read` rather than `org:read`) |
+| `event:read` | Every issue and event tool: `get_sentry_issue`, `list_sentry_issues`, `list_issues`, `get_issue_hashes`, `get_sentry_event_details`, `list_issue_events`, `list_error_events`, `get_stack_frames`, `check_dsym_status`, `list_breadcrumbs`, `get_issue_tags`, `get_issue_tag_values`, `list_activity` (`issues/{id}/activities/`), `get_grouping_config` (reads the issue's latest event), `get_trace_details` (`organizations/{org}/trace/{id}/`, falling back to `events-trace/{id}/` — organization *events* endpoints, gated on `event:read` rather than `org:read`), `list_event_attachments`, `get_event_attachment` (attachments may also require the organization's attachments access role), `list_user_feedback` |
 | `org:read` | `list_sentry_projects`, `list_teams`, `list_releases` (organization-level endpoints) |
 | `project:read` | `list_sentry_projects`; `get_grouping_config` (`projects/{org}/{project}/events/{id}/grouping-info/`) |
 | `team:read` | `list_teams` |
@@ -196,7 +196,7 @@ echo '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' | \
   npx -y selfhosted-sentry-mcp
 ```
 
-You should see a JSON response listing 24 tools, plus a startup line on stderr naming your org slug and Sentry URL. (With npm release 1.1.2 you will see 12 tools — see the [version note](#3-install). For a source build, replace `npx -y selfhosted-sentry-mcp` with `node build/index.js`.)
+You should see a JSON response listing 28 tools, plus a startup line on stderr naming your org slug and Sentry URL. (With npm release 1.1.2 you will see 12 tools — see the [version note](#3-install). For a source build, replace `npx -y selfhosted-sentry-mcp` with `node build/index.js`.)
 
 ```
 Self-hosted Sentry MCP server v… running for org "your-org-slug" at https://your-sentry-instance.com
@@ -225,7 +225,7 @@ If a response comes back truncated, narrow it rather than asking for more — pa
 
 ## Tools
 
-24 tools across 6 categories. Parameters are **required** unless marked *optional*.
+28 tools across 8 categories. Parameters are **required** unless marked *optional*.
 
 **WRITE** marks the five tools that can modify Sentry. Under `SENTRY_READ_ONLY=true` the four dedicated write tools are hidden from the tool list and refused if called anyway, while `raw_sentry_api` stays available with `GET` only. Every tool also carries MCP annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`), so clients can decide which calls need confirmation — see [Configuration](#what-sentry_read_onlytrue-blocks).
 
@@ -289,6 +289,20 @@ Call the same tool again with `cursor` set to `next_cursor` to get the next page
 | `get_grouping_config` | Why the issue's latest event was grouped the way it was: grouping variants, their hashes and the components that contributed | `issue_id` |
 | `merge_issues` **WRITE** | Merge issues into one | `issue_id`, `target_ids[]` — **maximum 10**. More than 10 is rejected with an invalid-params error, not truncated. All issues must be error issues in the same project. **Sentry picks the surviving parent** (the earliest first seen), which may not be `issue_id`; the result reports the actual `parent` and `children`, and `merged: false` when Sentry did not confirm the merge. Merging is not reversible. |
 
+### Attachment and feedback tools
+
+| Tool | Purpose | Parameters |
+| --- | --- | --- |
+| `list_event_attachments` | Files the SDK attached to events: log files, minidumps, screenshots, view hierarchies | *either* `issue_id` (all attachments on the issue) *or* `project_slug` + `event_id`; *optional* `limit` (1–100, default 25), `cursor` |
+| `get_event_attachment` | Contents of a text attachment such as a log file | `project_slug`, `event_id`, `attachment_id`; *optional* `grep_pattern` (matching lines with context, across the whole file), `max_chars` (1–100,000, default 20,000 — the **end** of the file is kept, since that is usually nearest the crash). Binary attachments (minidumps, images) and files over 5 MB return metadata only; files Sentry serves from external storage via a redirect are not fetched with your token. |
+| `list_user_feedback` | What end users wrote when reporting a crash (Sentry user reports) | *either* `issue_id` *or* `project_slug`; *optional* `limit` (1–100, default 25), `cursor`. Reporter emails are omitted. Feedback from Sentry's newer User Feedback widget is stored as issues — find it with `list_issues` and `query: "issue.category:feedback"`. |
+
+### Account tools
+
+| Tool | Purpose | Parameters |
+| --- | --- | --- |
+| `whoami` | Connection and token check: the user the token belongs to, its scopes, whether `SENTRY_ORG_SLUG` is reachable, and which tools those scopes rule out. Start here when other tools return 401/403. | none |
+
 ### Raw API
 
 | Tool | Purpose | Parameters |
@@ -319,7 +333,7 @@ Build:
 docker build -t selfhosted-sentry-mcp:latest .
 ```
 
-The Docker image builds from your checkout, so it includes `SENTRY_READ_ONLY` and all 24 tools regardless of what is published on npm.
+The Docker image builds from your checkout, so it includes `SENTRY_READ_ONLY` and all 28 tools regardless of what is published on npm.
 
 Client config:
 

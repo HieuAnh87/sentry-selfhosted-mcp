@@ -152,6 +152,31 @@ export interface SentryActivity {
   issue?: string;
 }
 
+/** Serialized EventAttachment (`.../attachments/`). */
+export interface SentryAttachment {
+  id: string;
+  event_id: string;
+  type: string;
+  name: string;
+  mimetype?: string;
+  size: number;
+  dateCreated: string;
+  headers?: Record<string, string>;
+  [key: string]: unknown;
+}
+
+/** Serialized UserReport (`user-reports/`), the user feedback attached to an event. */
+export interface SentryUserReport {
+  id: string;
+  eventID: string;
+  name?: string;
+  email?: string;
+  comments: string;
+  dateCreated: string;
+  issue?: Record<string, unknown> | null;
+  [key: string]: unknown;
+}
+
 export interface SentryProject {
   id: string;
   slug: string;

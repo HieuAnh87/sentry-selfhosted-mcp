@@ -140,6 +140,28 @@ const expectedTools = [
     required: ['issue_id', 'target_ids'],
     optional: [],
   },
+  // Attachment & feedback tools
+  {
+    name: 'list_event_attachments',
+    required: [],
+    optional: ['issue_id', 'project_slug', 'event_id', 'limit', 'cursor'],
+  },
+  {
+    name: 'get_event_attachment',
+    required: ['project_slug', 'event_id', 'attachment_id'],
+    optional: ['grep_pattern', 'max_chars'],
+  },
+  {
+    name: 'list_user_feedback',
+    required: [],
+    optional: ['issue_id', 'project_slug', 'limit', 'cursor'],
+  },
+  // Account
+  {
+    name: 'whoami',
+    required: [],
+    optional: [],
+  },
   // Raw API
   {
     name: 'raw_sentry_api',
@@ -169,11 +191,11 @@ describe('Sentry MCP Server Tools (live tools/list contract)', () => {
     await server?.stop();
   });
 
-  it('should serve exactly 24 tools', () => {
+  it('should serve exactly 28 tools', () => {
     assert.strictEqual(
       actualTools.length,
-      24,
-      `Server should expose 24 tools, got ${actualTools.length}: ${sorted(actualTools.map((t) => t.name)).join(', ')}`
+      28,
+      `Server should expose 28 tools, got ${actualTools.length}: ${sorted(actualTools.map((t) => t.name)).join(', ')}`
     );
   });
 

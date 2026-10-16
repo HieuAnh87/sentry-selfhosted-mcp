@@ -30,7 +30,7 @@ SENTRY_MCP_TEST_ENTRY=/path/to/pkg/build/index.js node --test test/tools.test.js
 
 ## Boundaries
 
-- Treat the 24-tool list in `test/tools.test.js` as a compatibility gate. It is asserted against a
+- Treat the 28-tool list in `test/tools.test.js` as a compatibility gate. It is asserted against a
   running server, so adding, removing, or renaming a tool fails here until the table is updated too.
 - Every test must fail against the behaviour it guards. A test that passes both before and after a
   fix is not a regression test — check it against the previous implementation before relying on it.

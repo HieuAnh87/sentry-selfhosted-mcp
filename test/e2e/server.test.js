@@ -210,7 +210,7 @@ describe('MCP server end-to-end', () => {
 
       const tools = await server.listTools();
 
-      assert.strictEqual(tools.length, 24, 'the server must survive failing tool calls');
+      assert.strictEqual(tools.length, 28, 'the server must survive failing tool calls');
     });
   });
 
