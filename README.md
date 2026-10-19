@@ -38,15 +38,6 @@ Which scope each tool needs: [Token scopes](#token-scopes).
 
 > **Use 1.2.0 or later.** Every earlier version is deprecated: its `raw_sentry_api` accepted absolute URLs and sent your Sentry auth token to them, and it has no `SENTRY_READ_ONLY`. If you ran an earlier version with an agent that reads Sentry data, rotate the token. The examples use `selfhosted-sentry-mcp@latest` so `npx` checks for the newest release instead of reusing an older copy from its cache. Check what you have with `npm ls -g selfhosted-sentry-mcp`.
 
-<!-- TEMPORARY: remove this note once `npm view selfhosted-sentry-mcp version` prints 1.2.0 -->
-> **npm still serves 1.1.2 for now.** 1.2.0 is [released on GitHub](https://github.com/HieuAnh87/sentry-selfhosted-mcp/releases/tag/v1.2.0); the npm release is pending. Until `npm view selfhosted-sentry-mcp version` prints `1.2.0`, use the release tarball in place of `selfhosted-sentry-mcp@latest` in every example below:
->
-> ```bash
-> npx -y https://github.com/HieuAnh87/sentry-selfhosted-mcp/releases/download/v1.2.0/selfhosted-sentry-mcp-1.2.0.tgz
-> ```
->
-> In a client config that means `"args": ["-y", "https://github.com/HieuAnh87/sentry-selfhosted-mcp/releases/download/v1.2.0/selfhosted-sentry-mcp-1.2.0.tgz"]`.
-
 **Nothing to install.** The recommended setup runs the published package through `npx` straight from your MCP client config — skip to [Client configuration](#client-configuration).
 
 To install it globally anyway:
